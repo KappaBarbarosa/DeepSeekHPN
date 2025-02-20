@@ -1,0 +1,65 @@
+# --- QMIX specific parameters ---
+
+# use epsilon greedy action selector
+action_selector: "epsilon_greedy"
+epsilon_start: 1.0
+epsilon_finish: 0.05
+epsilon_anneal_time: 100000 # 500000 for 6h_vs_8z
+
+runner: "parallel"
+batch_size_run: 8 # batch_size_run=4, buffer_size = 2500, batch_size=64  for 3s5z_vs_3s6z
+buffer_size: 5000 
+batch_size: 128
+
+t_max: 10050000
+
+# update the target network every {} episodes
+target_update_interval: 200
+
+# use the Q_Learner to train
+mac: "hpn_mac"
+#agent: "hpn_rnn"
+agent: "deepseek_rnn"
+
+hpn_hyper_dim: 64
+hpn_hyper_activation: 'relu'
+
+hpn_head_num: 1 # 2 for 3s_vs_5z and 6h_vs_8z
+agent_output_type: q
+
+learner: "nq_learner"
+mixer: "qmix"
+mixing_embed_dim: 32
+hypernet_embed: 64
+lr: 0.001 # Learning rate for agents
+td_lambda: 0.6 # 0.3 for 6h_vs_8z
+optimizer: 'adam'
+q_lambda: False
+
+
+name: "hpn_qmix"
+
+obs_agent_id: True # Include the agent's one_hot id in the observation
+obs_last_action: False # Include the agent's last action (one_hot) in the observation
+
+############## deepseek
+usingmoe: True
+max_seq_len: 256
+dim: 32
+inter_dim: 64
+moe_inter_dim: 48
+n_layers: 1
+n_dense_layers: 0
+mlp_hidden_dim: 32
+n_heads: 4
+hidden_size: 64
+route_scale: 1.0
+
+n_shared_experts: 2
+n_routed_experts: 32
+n_activated_experts:  6
+n_expert_groups:  1
+n_limited_groups:  1
+
+score_func: "softmax"
+
