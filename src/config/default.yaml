@@ -55,3 +55,5 @@ enable_parallel_computing: False
 cpu_inference: True
 #cpu_inference: False
 asn_hidden_size: 32 # 64
+
+device_name: 0

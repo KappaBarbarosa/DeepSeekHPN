@@ -210,7 +210,10 @@ def run_sequential(args, logger):
                           device="cpu" if args.buffer_cpu_only else args.device)
     # Setup multiagent controller here
     mac = mac_REGISTRY[args.mac](buffer.scheme, groups, args)
-
+    # Calculate mac.agent parameters and save to param.txt
+    agent_params = sum(p.numel() for p in mac.parameters())
+    with open("param.txt", "w") as f:
+        f.write(f"{args.env_args['map_name']}: Total parameters in agent: {agent_params}\n")
     # Give runner the scheme
     runner.setup(scheme=scheme, groups=groups, preprocess=preprocess, mac=mac)
 

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from deepseeek_utils import ColumnParallelLinear, RowParallelLinear
+from .deepseeek_utils import ColumnParallelLinear, RowParallelLinear
 class MLP(nn.Module):
     """
     Multi-Layer Perceptron (MLP) used as a feed-forward layer.

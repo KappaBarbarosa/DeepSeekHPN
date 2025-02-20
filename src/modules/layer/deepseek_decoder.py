@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 
 from typing import Optional
-from deepseeek_utils import *
-from deepseek_rms_norm import RMSNorm
-from deepseek_mla import MLA
-from deepseek_mlp import MLP
-from deepseek_moe import MoE
+from .deepseeek_utils import *
+from .deepseek_rms_norm import RMSNorm
+from .deepseek_mla import MLA
+from .deepseek_mlp import MLP
+from .deepseek_moe import MoE
 class Block(nn.Module):
     """
     Transformer block combining attention and feed-forward layers.

@@ -806,7 +806,7 @@ class DeepseekSdpaAttention(DeepseekAttention):
     SDPA API.
     """
 
-    # Adapted from DeepseekAttention.forward
+    # Adapted from .deepseekAttention.forward
     def forward(
         self,
         hidden_states: torch.Tensor,

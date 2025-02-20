@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from deepseeek_utils import Linear
+from .deepseeek_utils import Linear
 class Expert(nn.Module):
     """
     Expert layer for Mixture-of-Experts (MoE) models.

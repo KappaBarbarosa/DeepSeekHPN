@@ -3,8 +3,8 @@ import torch.nn as nn
 import math
 import warnings
 from typing import Optional
-from deepseeek_utils import *
-from deepseek_rms_norm import RMSNorm
+from .deepseeek_utils import *
+from .deepseek_rms_norm import RMSNorm
 class MLA(nn.Module):
     """
     Multi-Headed Attention Layer (MLA).

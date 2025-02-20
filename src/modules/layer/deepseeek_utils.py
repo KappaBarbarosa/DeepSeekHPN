@@ -2,8 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple, Optional, Literal
-from kernel import act_quant, weight_dequant, fp8_gemm
-import torch.distributed as dist
+import math
 world_size = 1
 rank = 0
 block_size = 128
@@ -146,7 +145,7 @@ class RowParallelLinear(Linear):
             y += self.bias
         return y
 
-def precompute_freqs_cis(args: ModelArgs) -> torch.Tensor:
+def precompute_freqs_cis(args) -> torch.Tensor:
     """
     Precomputes frequency-based complex exponential values for rotary positional embeddings.
 

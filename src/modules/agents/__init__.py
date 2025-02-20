@@ -9,7 +9,7 @@ from .gnn_rnn_agent import GnnRNNAgent
 from .n_rnn_agent import NRNNAgent
 from .rnn_agent import RNNAgent
 from .updet_agent import UPDeT
-from deepseek_rnn_agent import DeepSeek_RNNAgent
+from .deepseek_rnn_agent import DeepSeek_RNNAgent
 
 REGISTRY["rnn"] = RNNAgent
 REGISTRY["n_rnn"] = NRNNAgent

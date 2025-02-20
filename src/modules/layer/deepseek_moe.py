@@ -1,9 +1,9 @@
 
 import torch
 import torch.nn as nn
-from deepseek_mlp import MLP
-from deepseek_expert import Expert
-from deepseeek_utils import *
+from .deepseek_mlp import MLP
+from .deepseek_expert import Expert
+from .deepseeek_utils import *
 
 class MoE(nn.Module):
     """
