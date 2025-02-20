@@ -5,7 +5,7 @@ from multiprocessing import Pipe, Process
 
 import numpy as np
 import time
-
+import wandb
 
 # Based (very) heavily on SubprocVecEnv from OpenAI Baselines
 # https://github.com/openai/baselines/blob/master/baselines/common/vec_env/subproc_vec_env.py
@@ -228,9 +228,9 @@ class ParallelRunner:
 
         n_test_runs = max(1, self.args.test_nepisode // self.batch_size) * self.batch_size
         if test_mode and (len(self.test_returns) == n_test_runs):
-            self._log(cur_returns, cur_stats, log_prefix)
+            self._log(cur_returns, cur_stats, log_prefix,self.args.use_wandb)
         elif not test_mode and self.t_env - self.log_train_stats_t >= self.args.runner_log_interval:
-            self._log(cur_returns, cur_stats, log_prefix)
+            self._log(cur_returns, cur_stats, log_prefix,self.args.use_wandb)
             if hasattr(self.mac.action_selector, "epsilon"):
                 self.logger.log_stat("epsilon", self.mac.action_selector.epsilon, self.t_env)
             self.log_train_stats_t = self.t_env
@@ -238,7 +238,7 @@ class ParallelRunner:
         return self.batch
         # return clear_no_reward_sub_trajectory(self.batch)
 
-    def _log(self, returns, stats, prefix):
+    def _log(self, returns, stats, prefix,use_wandb=False):
         self.logger.log_stat(prefix + "return_min", np.min(returns), self.t_env)
         self.logger.log_stat(prefix + "return_max", np.max(returns), self.t_env)
         self.logger.log_stat(prefix + "return_mean", np.mean(returns), self.t_env)
@@ -248,6 +248,8 @@ class ParallelRunner:
         for k, v in stats.items():
             if k != "n_episodes":
                 self.logger.log_stat(prefix + k + "_mean", v / stats["n_episodes"], self.t_env)
+                if "test_battle_won" in (prefix + k) and use_wandb:
+                    wandb.log({prefix + k + "_mean": v / stats["n_episodes"]}, step=self.t_env)
         stats.clear()
 
 

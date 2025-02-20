@@ -9,7 +9,7 @@ from utils.logging import Logger
 from utils.timehelper import time_left, time_str
 from os.path import dirname, abspath
 import sys
-
+import wandb
 from learners import REGISTRY as le_REGISTRY
 from runners import REGISTRY as r_REGISTRY
 from controllers import REGISTRY as mac_REGISTRY
@@ -123,6 +123,15 @@ def run(_run, _config, _log):
 
     # sacred is on by default
     logger.setup_sacred(_run)
+    if args.use_wandb:
+        wandb.tensorboard.patch(root_logdir=tb_logs_direc)
+        wandb.init(
+        # set the wandb project where this run will be logged
+        entity="llmcommander2024",
+        project=args.env_args['map_name']+ '_test',
+        name=unique_token,
+        config=_config
+        )
 
     # Run and train
     run_sequential(args=args, logger=logger)
