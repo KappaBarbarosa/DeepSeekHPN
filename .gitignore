@@ -9,4 +9,5 @@ results/
 .idea/
 ./install_dependencies.sh
 ./install_sc2.sh
+wandb/
 
