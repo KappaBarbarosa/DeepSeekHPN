@@ -57,7 +57,7 @@ class Linear(nn.Module):
         bias (bool): Whether to include a bias term. Defaults to False.
         dtype (optional): Data type for the layer. Defaults to `torch.bfloat16`.
     """
-    dtype = torch.bfloat16
+    dtype = torch.float32
 
     def __init__(self, in_features: int, out_features: int, bias: bool = False, dtype = None):
         super().__init__()
@@ -215,10 +215,10 @@ def precompute_freqs_cis(args) -> torch.Tensor:
         return ramp_func
 
     freqs = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
-    if seqlen > args.original_seq_len:
-        low, high = find_correction_range(beta_fast, beta_slow, dim, base, args.original_seq_len)
-        smooth = 1 - linear_ramp_factor(low, high, dim // 2)
-        freqs = freqs / factor * (1 - smooth) + freqs * smooth
+    # if seqlen > args.original_seq_len:
+    #     low, high = find_correction_range(beta_fast, beta_slow, dim, base, args.original_seq_len)
+    #     smooth = 1 - linear_ramp_factor(low, high, dim // 2)
+    #     freqs = freqs / factor * (1 - smooth) + freqs * smooth
 
     t = torch.arange(seqlen)
     freqs = torch.outer(t, freqs)

@@ -20,9 +20,9 @@ class MLP(nn.Module):
             inter_dim (int): Hidden layer dimensionality.
         """
         super().__init__()
-        self.w1 = ColumnParallelLinear(dim, inter_dim)
-        self.w2 = RowParallelLinear(inter_dim, dim)
-        self.w3 = ColumnParallelLinear(dim, inter_dim)
+        self.w1 = nn.Linear(dim, inter_dim)
+        self.w2 = nn.Linear(inter_dim, dim)
+        self.w3 = nn.Linear(dim, inter_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """

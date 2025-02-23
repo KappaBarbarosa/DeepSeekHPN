@@ -20,9 +20,9 @@ class Expert(nn.Module):
             inter_dim (int): Hidden layer dimensionality.
         """
         super().__init__()
-        self.w1 = Linear(dim, inter_dim)
-        self.w2 = Linear(inter_dim, dim)
-        self.w3 = Linear(dim, inter_dim)
+        self.w1 = nn.Linear(dim, inter_dim)
+        self.w2 = nn.Linear(inter_dim, dim)
+        self.w3 = nn.Linear(dim, inter_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """

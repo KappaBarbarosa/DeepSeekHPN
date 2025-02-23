@@ -2,6 +2,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import torch.nn.functional as F
+
+def rms_norm(x, weight, eps=1e-6):
+    norm = torch.sqrt(torch.mean(x**2, dim=-1, keepdim=True) + eps)
+    return weight * (x / norm)
+
+
 class RMSNorm(nn.Module):
     """
     Root Mean Square Layer Normalization (RMSNorm).
@@ -26,4 +33,4 @@ class RMSNorm(nn.Module):
         Returns:
             torch.Tensor: Normalized tensor with the same shape as input.
         """
-        return F.rms_norm(x, (self.dim,), self.weight, self.eps)
+        return rms_norm(x, self.weight, self.eps)

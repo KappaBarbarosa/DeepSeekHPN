@@ -28,6 +28,8 @@ class Block(nn.Module):
         super().__init__()
         self.attn = MLA(args)
         self.ffn = MLP(args.dim, args.inter_dim) if layer_id < args.n_dense_layers else MoE(args)
+        print(f"Layer {layer_id} attn parameters: {sum(p.numel() for p in self.attn.parameters())}")
+        print(f"Layer {layer_id} ffn parameters: {sum(p.numel() for p in self.ffn.parameters())}")
         self.attn_norm = RMSNorm(args.dim)
         self.ffn_norm = RMSNorm(args.dim)
 
@@ -76,10 +78,10 @@ class Transformer(nn.Module):
         for layer_id in range(args.n_layers):
             self.layers.append(Block(layer_id, args))
         self.norm = RMSNorm(args.dim)
-        self.head = ColumnParallelLinear(args.dim, args.rnn_hidden_dim, dtype=torch.get_default_dtype())
+        self.head = nn.Linear(args.dim, args.rnn_hidden_dim)
         self.register_buffer("freqs_cis", precompute_freqs_cis(args), persistent=False)
 
-    def forward(self, tokens: torch.Tensor, start_pos: int = 0):
+    def forward(self, h, start_pos: int = 0):
         """
         Forward pass for the Transformer model.
 
@@ -90,15 +92,21 @@ class Transformer(nn.Module):
         Returns:
             torch.Tensor: Logits tensor of shape (batch_size, vocab_size).
         """
-        seqlen = tokens.size(1)
-        h = self.embed(tokens)
+        seqlen = h.size(1)
+        # h = self.embed(tokens)
         freqs_cis = self.freqs_cis[start_pos:start_pos+seqlen]
         mask = None
         if seqlen > 1:
-            mask = torch.full((seqlen, seqlen), float("-inf"), device=tokens.device).triu_(1)
+            mask = torch.full((seqlen, seqlen), float("-inf"), device=h.device).triu_(1)
+        # print("before layer:", h[0])
         for layer in self.layers:
             h = layer(h, start_pos, freqs_cis, mask)
+        # print("after layer:", h[0])
         h = self.norm(h)[:, -1]
         logits = self.head(h)
+        # print("after norm:",h[0])
+        # print("after head:",logits[0])
+        # print()
+        # print()
 
         return logits

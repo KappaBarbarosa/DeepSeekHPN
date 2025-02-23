@@ -33,7 +33,8 @@ class BasicMAC:
         agent_inputs = self._build_inputs(ep_batch, t)
         avail_actions = ep_batch["avail_actions"][:, t]
         agent_outs, self.hidden_states = self.agent(agent_inputs, self.hidden_states)
-
+        # print("agents_out:", agent_outs[0])
+        # print("hidden_states:", self.hidden_states[0])
         # Softmax the agent outputs if they're policy logits
         if self.agent_output_type == "pi_logits":
             if getattr(self.args, "mask_before_softmax", True):

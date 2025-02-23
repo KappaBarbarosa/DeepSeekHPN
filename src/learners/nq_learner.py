@@ -58,6 +58,7 @@ class NQLearner:
 
         self.last_target_update_episode = 0
         self.device = th.device('cuda' if args.use_cuda else 'cpu')
+        print("Using device: {}".format(self.device))
         self.params = list(mac.parameters())
 
         if args.mixer == "qatten":
@@ -96,7 +97,7 @@ class NQLearner:
 
     def train(self, batch: EpisodeBatch, t_env: int, episode_num: int):
         start_time = time.time()
-        if self.args.use_cuda and str(self.mac.get_device()) == "cpu":
+        if self.args.use_cuda:
             self.mac.cuda()
 
         # Get the relevant quantities
@@ -125,7 +126,7 @@ class NQLearner:
         mac_out[avail_actions == 0] = -9999999
         # Pick the Q-Values for the actions taken by each agent
         chosen_action_qvals = th.gather(mac_out[:, :-1], dim=3, index=actions).squeeze(3)  # Remove the last dim
-
+        # print("chosen_action_qvals", chosen_action_qvals[0])
         # Calculate the Q-Values necessary for the target
         with th.no_grad():
             if self.enable_parallel_computing:

@@ -1,109 +1,87 @@
 import torch
 import torch.nn as nn
 import math
-import warnings
 from typing import Optional
 from .deepseeek_utils import *
 from .deepseek_rms_norm import RMSNorm
+
 class MLA(nn.Module):
     """
-    Multi-Headed Attention Layer (MLA).
-
-    Attributes:
-        dim (int): Dimensionality of the input features.
-        n_heads (int): Number of attention heads.
-        n_local_heads (int): Number of local attention heads for distributed systems.
-        q_lora_rank (int): Rank for low-rank query projection.
-        kv_lora_rank (int): Rank for low-rank key/value projection.
-        qk_nope_head_dim (int): Dimensionality of non-positional query/key projections.
-        qk_rope_head_dim (int): Dimensionality of rotary-positional query/key projections.
-        qk_head_dim (int): Total dimensionality of query/key projections.
-        v_head_dim (int): Dimensionality of value projections.
-        softmax_scale (float): Scaling factor for softmax in attention computation.
+    Standard Multi-Head Attention Layer (MHA) without Cache.
     """
+
     def __init__(self, args):
         super().__init__()
-        self.dim = args.dim
-        self.n_heads = args.n_heads
-        self.n_local_heads = args.n_heads 
-        self.q_lora_rank = args.q_lora_rank
-        self.kv_lora_rank = args.kv_lora_rank
-        self.qk_nope_head_dim = args.qk_nope_head_dim
-        self.qk_rope_head_dim = args.qk_rope_head_dim
-        self.qk_head_dim = args.qk_nope_head_dim + args.qk_rope_head_dim
-        self.v_head_dim = args.v_head_dim
+        self.dim = args.dim  # 模型總維度
+        self.n_heads = args.n_heads  # 注意力頭數
+        self.n_local_heads = args.n_heads  # 本地注意力頭數（可能用於分佈式）
 
-        if self.q_lora_rank == 0:
-            self.wq = ColumnParallelLinear(self.dim, self.n_heads * self.qk_head_dim)
-        else:
-            self.wq_a = Linear(self.dim, self.q_lora_rank)
-            self.q_norm = RMSNorm(self.q_lora_rank)
-            self.wq_b = ColumnParallelLinear(self.q_lora_rank, self.n_heads * self.qk_head_dim)
-        self.wkv_a = Linear(self.dim, self.kv_lora_rank + self.qk_rope_head_dim)
-        self.kv_norm = RMSNorm(self.kv_lora_rank)
-        self.wkv_b = ColumnParallelLinear(self.kv_lora_rank, self.n_heads * (self.qk_nope_head_dim + self.v_head_dim))
-        self.wo = RowParallelLinear(self.n_heads * self.v_head_dim, self.dim)
+        # Query, Key, Value 的拆分維度
+        self.qk_nope_head_dim = args.qk_nope_head_dim  # 非位置部分維度
+        self.qk_rope_head_dim = args.qk_rope_head_dim      # 位置部分（RoPE）的維度
+        self.qk_head_dim = self.qk_nope_head_dim + self.qk_rope_head_dim  # 每個頭總維度
+        self.v_head_dim = args.v_head_dim  # Value 維度
+
+        # 確保設定正確
+        assert self.qk_head_dim == self.qk_nope_head_dim + self.qk_rope_head_dim, (
+            f"qk_head_dim ({self.qk_head_dim}) != qk_nope_head_dim ({self.qk_nope_head_dim}) + "
+            f"qk_rope_head_dim ({self.qk_rope_head_dim})"
+        )
+
+        # Q, K, V 投影層（這裡假定 ColumnParallelLinear 和 RowParallelLinear 已定義）
+        self.wq = nn.Linear(self.dim, self.n_heads * self.qk_head_dim)
+        self.wk = nn.Linear(self.dim, self.n_heads * self.qk_head_dim)
+        self.wv = nn.Linear(self.dim, self.n_heads * self.v_head_dim)
+
+        # 輸出層
+        self.wo = nn.Linear(self.n_heads * self.v_head_dim, self.dim)
+
+        # Softmax 縮放因子
         self.softmax_scale = self.qk_head_dim ** -0.5
-        if args.max_seq_len > args.original_seq_len:
-            mscale = 0.1 * args.mscale * math.log(args.rope_factor) + 1.0
-            self.softmax_scale = self.softmax_scale * mscale * mscale
-
-        if attn_impl == "naive":
-            self.register_buffer("k_cache", torch.zeros(args.max_batch_size, args.max_seq_len, self.n_local_heads, self.qk_head_dim), persistent=False)
-            self.register_buffer("v_cache", torch.zeros(args.max_batch_size, args.max_seq_len, self.n_local_heads, self.v_head_dim), persistent=False)
-        else:
-            self.register_buffer("kv_cache", torch.zeros(args.max_batch_size, args.max_seq_len, self.kv_lora_rank), persistent=False)
-            self.register_buffer("pe_cache", torch.zeros(args.max_batch_size, args.max_seq_len, self.qk_rope_head_dim), persistent=False)
 
     def forward(self, x: torch.Tensor, start_pos: int, freqs_cis: torch.Tensor, mask: Optional[torch.Tensor]):
         """
-        Forward pass for the Multi-Headed Attention Layer (MLA).
-
-        Args:
-            x (torch.Tensor): Input tensor of shape (batch_size, seq_len, dim).
-            start_pos (int): Starting position in the sequence for caching.
-            freqs_cis (torch.Tensor): Precomputed complex exponential values for rotary embeddings.
-            mask (Optional[torch.Tensor]): Mask tensor to exclude certain positions from attention.
-
-        Returns:
-            torch.Tensor: Output tensor with the same shape as the input.
+        Forward pass for Multi-Head Attention (without Cache).
         """
         bsz, seqlen, _ = x.size()
-        end_pos = start_pos + seqlen
-        if self.q_lora_rank == 0:
-            q = self.wq(x)
-        else:
-            q = self.wq_b(self.q_norm(self.wq_a(x)))
-        q = q.view(bsz, seqlen, self.n_local_heads, self.qk_head_dim)
+
+        # 計算 Q, K, V，並 reshape 為 [bsz, seqlen, n_heads, head_dim]
+        q = self.wq(x).view(bsz, seqlen, self.n_local_heads, self.qk_head_dim)
+        k = self.wk(x).view(bsz, seqlen, self.n_local_heads, self.qk_head_dim)
+        v = self.wv(x).view(bsz, seqlen, self.n_local_heads, self.v_head_dim)
+
+        # 拆分成非位置部分與位置部分（最後一維拆分）
+        # q_nope: [bsz, seqlen, n_heads, qk_nope_head_dim]
+        # q_pe:   [bsz, seqlen, n_heads, qk_rope_head_dim]
         q_nope, q_pe = torch.split(q, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1)
+        k_nope, k_pe = torch.split(k, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1)
+
+        # 將位置部分應用 RoPE（假設 apply_rotary_emb() 不改變前3個維度）
         q_pe = apply_rotary_emb(q_pe, freqs_cis)
-        kv = self.wkv_a(x)
-        kv, k_pe = torch.split(kv, [self.kv_lora_rank, self.qk_rope_head_dim], dim=-1)
-        k_pe = apply_rotary_emb(k_pe.unsqueeze(2), freqs_cis)
-        if attn_impl == "naive":
-            q = torch.cat([q_nope, q_pe], dim=-1)
-            kv = self.wkv_b(self.kv_norm(kv))
-            kv = kv.view(bsz, seqlen, self.n_local_heads, self.qk_nope_head_dim + self.v_head_dim)
-            k_nope, v = torch.split(kv, [self.qk_nope_head_dim, self.v_head_dim], dim=-1)
-            k = torch.cat([k_nope, k_pe.expand(-1, -1, self.n_local_heads, -1)], dim=-1)
-            self.k_cache[:bsz, start_pos:end_pos] = k
-            self.v_cache[:bsz, start_pos:end_pos] = v
-            scores = torch.einsum("bshd,bthd->bsht", q, self.k_cache[:bsz, :end_pos]) * self.softmax_scale
-        else:
-            wkv_b = self.wkv_b.weight if self.wkv_b.scale is None else weight_dequant(self.wkv_b.weight, self.wkv_b.scale, block_size) 
-            wkv_b = wkv_b.view(self.n_local_heads, -1, self.kv_lora_rank)
-            q_nope = torch.einsum("bshd,hdc->bshc", q_nope, wkv_b[:, :self.qk_nope_head_dim])
-            self.kv_cache[:bsz, start_pos:end_pos] = self.kv_norm(kv)
-            self.pe_cache[:bsz, start_pos:end_pos] = k_pe.squeeze(2)
-            scores = (torch.einsum("bshc,btc->bsht", q_nope, self.kv_cache[:bsz, :end_pos]) +
-                      torch.einsum("bshr,btr->bsht", q_pe, self.pe_cache[:bsz, :end_pos])) * self.softmax_scale
+        k_pe = apply_rotary_emb(k_pe, freqs_cis)
+        # 重新 reshape（如果 apply_rotary_emb 改變了形狀，則恢復為 [bsz, seqlen, n_heads, qk_rope_head_dim]）
+        q_pe = q_pe.view(bsz, seqlen, self.n_local_heads, self.qk_rope_head_dim)
+        k_pe = k_pe.view(bsz, seqlen, self.n_local_heads, self.qk_rope_head_dim)
+
+        # 驗證除了最後一個維度之外，其他維度是否一致（bsz, seqlen, n_heads）
+        assert q_nope.shape[:-1] == q_pe.shape[:-1], \
+            f"q_nope.shape {q_nope.shape} 與 q_pe.shape {q_pe.shape} 的前三個維度不匹配"
+        assert k_nope.shape[:-1] == k_pe.shape[:-1], \
+            f"k_nope.shape {k_nope.shape} 與 k_pe.shape {k_pe.shape} 的前三個維度不匹配"
+
+        # 拼接回完整的 Q 與 K，最後一維變為 qk_head_dim
+        q = torch.cat([q_nope, q_pe], dim=-1)
+        k = torch.cat([k_nope, k_pe], dim=-1)
+
+        # 計算注意力分數：scores = Q K^T * scaling
+        scores = torch.einsum("bshd,bthd->bsht", q, k) * self.softmax_scale
         if mask is not None:
             scores += mask.unsqueeze(1)
         scores = scores.softmax(dim=-1, dtype=torch.float32).type_as(x)
-        if attn_impl == "naive":
-            x = torch.einsum("bsht,bthd->bshd", scores, self.v_cache[:bsz, :end_pos])
-        else:
-            x = torch.einsum("bsht,btc->bshc", scores, self.kv_cache[:bsz, :end_pos])
-            x = torch.einsum("bshc,hdc->bshd", x, wkv_b[:, -self.v_head_dim:])
+
+        # 計算注意力加權 V
+        x = torch.einsum("bsht,bthd->bshd", scores, v)
+
+        # Flatten 最後兩個維度，並投影回輸出維度
         x = self.wo(x.flatten(2))
         return x

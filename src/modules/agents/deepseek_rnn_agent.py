@@ -45,6 +45,9 @@ class DeepSeek_RNNAgent(nn.Module):
         self.n_actions = args.n_actions
         self.n_heads = args.hpn_head_num
         self.rnn_hidden_dim = args.rnn_hidden_dim
+        self.mlp_hidden_dim = args.mlp_hidden_dim
+        self.cache = th.zeros(1, 1, self.rnn_hidden_dim)
+        
 
         # [4 + 1, (6, 5), (4, 5)]
         self.own_feats_dim, self.enemy_feats_dim, self.ally_feats_dim = input_shape
@@ -85,20 +88,22 @@ class DeepSeek_RNNAgent(nn.Module):
             )  # output shape: ally_feats_dim * rnn_hidden_dim
 
         self.unify_input_heads = Merger(self.n_heads, self.rnn_hidden_dim)
-        self.rnn = nn.GRUCell(self.rnn_hidden_dim, self.rnn_hidden_dim)
+        # self.rnn = nn.GRUCell(self.rnn_hidden_dim, self.rnn_hidden_dim)
         self.fc2_normal_actions = nn.Linear(self.rnn_hidden_dim, args.output_normal_actions)  # (no_op, stop, up, down, right, left)
         self.unify_output_heads = Merger(self.n_heads, 1)
 
 
-        self.initial_embediing = None
+        self.initial_embedding = None
         self.merge_mlp = nn.Sequential(
             nn.Linear(self.rnn_hidden_dim * 2, self.mlp_hidden_dim),
             nn.ReLU(inplace=True),
             nn.Linear(self.mlp_hidden_dim, self.rnn_hidden_dim)
         )
-        self.decoder = Transformer(args)
+        self.decoder = Transformer(args)    
         num_decoder_params = sum(p.numel() for p in self.decoder.parameters())
+        num_mlp_params = sum(p.numel() for p in self.merge_mlp.parameters())
         print(f"Number of parameters in self.decoder: {num_decoder_params}")
+        print(f"Number of parameters in self merge mlp: {num_mlp_params}") 
         # Reset parameters for hypernets
         # self._reset_hypernet_parameters(init_type="xavier")
         # self._reset_hypernet_parameters(init_type="kaiming")
@@ -122,11 +127,14 @@ class DeepSeek_RNNAgent(nn.Module):
                     m.bias.data.fill_(0.)
 
     def _reset_initial_embedding(self,bs):
+        # print("reset initial embedding", bs, self.n_agents)
         self.initial_embedding = th.zeros(bs*self.n_agents, self.rnn_hidden_dim).to(self.fc1_own.weight.device)
 
 
     def init_hidden(self):
         # make hidden states on same device as model
+        self._reset_initial_embedding(1)
+        self.cache = None
         return self.fc1_own.weight.new(1, self.rnn_hidden_dim).zero_()
 
     def forward(self, inputs, hidden_state):
@@ -181,10 +189,15 @@ class DeepSeek_RNNAgent(nn.Module):
         )  # [bs * n_agents, head, rnn_hidden_dim]
 
         obs_embedding = F.relu(embedding, inplace=True)
+        if self.initial_embedding.shape[0] != bs*self.n_agents:
+            self._reset_initial_embedding(bs)
         current_embedding = self.merge_mlp(th.cat([obs_embedding, self.initial_embedding], dim=-1)) # [bs * n_agents, rnn_hidden_dim]
-        self.cache = th.cat([self.cache, current_embedding], dim=-2) ## [bs * n_agents, timestep, rnn_hidden_dim]
-        hh = self.decoder(self.cache) # ## [bs * n_agents, timestep, rnn_hidden_dim]
-        self.initial_embedding = hh[:,-1].detach()
+        if self.cache is None:
+            self.cache = current_embedding.unsqueeze(1)
+        else:
+            self.cache = th.cat([self.cache, current_embedding.unsqueeze(1)], dim=-2) ## [bs * n_agents, timestep, rnn_hidden_dim]
+        hh = self.decoder(self.cache)  ## [bs * n_agents, rnn_hidden_dim]
+        self.initial_embedding = hh.clone().detach()
         # cache: concat
         # moe: share for common knowledge, other experts for finetuning, transfer learning is important
         # hpn: 
