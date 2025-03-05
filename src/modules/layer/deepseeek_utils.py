@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple, Optional, Literal
 import math
+import matplotlib.pyplot as plt
+import numpy as np
+import os
 world_size = 1
 rank = 0
 block_size = 128
@@ -267,13 +270,17 @@ class Gate(nn.Module):
         """
         super().__init__()
         self.dim = args.dim
+        self.args = args
         self.topk = args.n_activated_experts
         self.n_groups = args.n_expert_groups
         self.topk_groups = args.n_limited_groups
         self.score_func = args.score_func
         self.route_scale = args.route_scale
         self.weight = nn.Parameter(torch.empty(args.n_routed_experts, args.dim))
-        self.bias = nn.Parameter(torch.empty(args.n_routed_experts)) if self.dim == 7168 else None
+        self.bias = nn.Parameter(torch.empty(args.n_routed_experts)) if self.dim == 64 else None
+        self.log_interval = 1
+        self.count = 0
+        self.score_history = []
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -294,9 +301,35 @@ class Gate(nn.Module):
         if self.bias is not None:
             scores = scores + self.bias
 
+        self.score_history.append(scores[-1].detach().cpu().numpy())
+        if self.count % self.log_interval == 0:
+            print(f'scores:', scores[-1])
+            self.count = 0
+        self.count += 1
         indices = torch.topk(scores, self.topk, dim=-1)[1]
         weights = original_scores.gather(1, indices)
         if self.score_func == "sigmoid":
             weights /= weights.sum(dim=-1, keepdim=True)
         weights *= self.route_scale
         return weights.type_as(x), indices
+    def start_one_training(self):
+        self.count = 0
+        self.score_history = []
+        
+    def end_one_training(self,t_env):
+        self.count = 0
+        score_history = np.array(self.score_history)  # shape: (iterations, n_experts)
+        plt.figure(figsize=(10, 6))
+        n_experts = score_history.shape[1]
+        # 為每個 expert 畫一條曲線
+        for i in range(n_experts):
+            plt.plot(score_history[:, i], label=f'Expert {i}')
+        plt.xlabel('Iteration')
+        plt.ylabel('Gate Score')
+        plt.title('Gate Score over Training Iterations')
+        plt.legend()
+        save_dir = f'/home/marl2024/DeepSeek_HPN/results/gate_scores/{self.args.name}'
+        if not os.path.exists(save_dir):
+            os.mkdir(save_dir)
+        plt.savefig(f'{save_dir}/{t_env}_gate_scores.png')
+        plt.close()

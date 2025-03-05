@@ -104,9 +104,12 @@ class Transformer(nn.Module):
         # print("after layer:", h[0])
         h = self.norm(h)[:, -1]
         logits = self.head(h)
-        # print("after norm:",h[0])
-        # print("after head:",logits[0])
-        # print()
-        # print()
 
         return logits
+    
+    def start_one_training(self):
+        for layer in self.layers:
+            layer.ffn.gate.start_one_training()
+    def end_one_training(self,t_env):
+        for layer in self.layers:
+            layer.ffn.gate.end_one_training(t_env)

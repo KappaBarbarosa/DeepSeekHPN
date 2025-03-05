@@ -118,9 +118,13 @@ class NQLearner:
         self.mac.set_train_mode()
         mac_out = []
         self.mac.init_hidden(batch.batch_size)
+        if "deepseek" in self.args.agent:
+            self.mac.agent.start_one_training()
         for t in range(batch.max_seq_length):
             agent_outs = self.mac.forward(batch, t=t)
             mac_out.append(agent_outs)
+        if "deepseek" in self.args.agent and (t_env - self.log_stats_t >= self.args.learner_log_interval):
+            self.mac.agent.end_one_training(t_env)
         mac_out = th.stack(mac_out, dim=1)  # Concat over time
         # TODO: double DQN action, COMMENT: do not need copy
         mac_out[avail_actions == 0] = -9999999

@@ -37,7 +37,7 @@ optimizer: 'adam'
 q_lambda: False
 
 
-name: "deepseek_hpn"
+name: "deepseek_hpn_larger"
 
 obs_agent_id: True # Include the agent's one_hot id in the observation
 obs_last_action: False # Include the agent's last action (one_hot) in the observation
@@ -47,24 +47,24 @@ obs_last_action: False # Include the agent's last action (one_hot) in the observ
 usingmoe: True
 max_seq_len: 200
 dim: 64
-inter_dim: 16
-moe_inter_dim: 8
+inter_dim: 32
+moe_inter_dim: 16
 n_layers: 1
 n_dense_layers: 0
-mlp_hidden_dim: 16
+mlp_hidden_dim: 32
 n_heads: 4
-hidden_size: 16
+hidden_size: 32
 route_scale: 1.0
 
 ############## deepseek_mha
-qk_nope_head_dim: 16
-qk_rope_head_dim: 16
-v_head_dim: 16
+qk_nope_head_dim: 32
+qk_rope_head_dim: 32
+v_head_dim: 32
 
 ############## deepseek_moe
 n_shared_experts: 1
-n_routed_experts: 8
-n_activated_experts:  2
+n_routed_experts: 4
+n_activated_experts:  1
 n_expert_groups:  1
 n_limited_groups:  1
 score_func: "softmax"
@@ -76,5 +76,5 @@ beta_fast: 32
 beta_slow: 1
 mscale: 1.0
 
-use_wandb: True
+use_wandb: False
 

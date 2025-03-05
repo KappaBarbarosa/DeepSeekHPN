@@ -36,6 +36,8 @@ class MoE(nn.Module):
         self.experts = nn.ModuleList([Expert(args.dim, args.moe_inter_dim) if self.experts_start_idx <= i < self.experts_end_idx else None
                                       for i in range(self.n_routed_experts)])
         self.shared_experts = MLP(args.dim, args.n_shared_experts * args.moe_inter_dim)
+        self.log_interval = 1
+        self.count = 0
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -48,10 +50,19 @@ class MoE(nn.Module):
             torch.Tensor: Output tensor after expert routing and computation.
         """
         shape = x.size()
+        print(shape)
         x = x.view(-1, self.dim)
         weights, indices = self.gate(x)
+        # print(f'indice shape:', indices.shape, 'last choice :', indices[-1])
         y = torch.zeros_like(x)
+        
         counts = torch.bincount(indices.flatten(), minlength=self.n_routed_experts).tolist()
+        if self.count % self.log_interval == 0:
+            # print(f'indices:', indices)
+            # print(f'weights:', weights)
+            print(f'counts:', counts)
+            self.count=0
+        self.count += 1
         for i in range(self.experts_start_idx, self.experts_end_idx):
             if counts[i] == 0:
                 continue

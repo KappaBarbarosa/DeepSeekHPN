@@ -136,6 +136,11 @@ class DeepSeek_RNNAgent(nn.Module):
         self._reset_initial_embedding(1)
         self.cache = None
         return self.fc1_own.weight.new(1, self.rnn_hidden_dim).zero_()
+    
+    def start_one_training(self):
+        self.decoder.start_one_training()
+    def end_one_training(self,t_env):
+        self.decoder.end_one_training(t_env)
 
     def forward(self, inputs, hidden_state):
         # [bs, n_agents, mv_fea_dim], [bs * n_agents * n_enemies, enemy_fea_dim], [bs * n_agents * n_allies, ally_fea_dim], [bs, n_agents, own_fea_dim]
@@ -196,6 +201,7 @@ class DeepSeek_RNNAgent(nn.Module):
             self.cache = current_embedding.unsqueeze(1)
         else:
             self.cache = th.cat([self.cache, current_embedding.unsqueeze(1)], dim=-2) ## [bs * n_agents, timestep, rnn_hidden_dim]
+        # print("cache shape:", self.cache.shape)
         hh = self.decoder(self.cache)  ## [bs * n_agents, rnn_hidden_dim]
         self.initial_embedding = hh.clone().detach()
         # cache: concat
