@@ -303,7 +303,7 @@ class Gate(nn.Module):
 
         self.score_history.append(scores[-1].detach().cpu().numpy())
         if self.count % self.log_interval == 0:
-            print(f'scores:', scores[-1])
+            # print(f'adding bias:', scores[-1])
             self.count = 0
         self.count += 1
         indices = torch.topk(scores, self.topk, dim=-1)[1]
@@ -328,8 +328,12 @@ class Gate(nn.Module):
         plt.ylabel('Gate Score')
         plt.title('Gate Score over Training Iterations')
         plt.legend()
-        save_dir = f'/home/marl2024/DeepSeek_HPN/results/gate_scores/{self.args.name}'
+        root = '/home/marl2024/DeepSeekHPN/results/gate_scores'
+        if not os.path.exists(root):
+            os.mkdir(root)
+
+        save_dir = os.path.join(root, self.args.name,self.args.device_name)
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
-        plt.savefig(f'{save_dir}/{t_env}_gate_scores.png')
+        plt.savefig(f'{save_dir}/{t_env}.png')
         plt.close()

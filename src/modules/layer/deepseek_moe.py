@@ -50,7 +50,6 @@ class MoE(nn.Module):
             torch.Tensor: Output tensor after expert routing and computation.
         """
         shape = x.size()
-        print(shape)
         x = x.view(-1, self.dim)
         weights, indices = self.gate(x)
         # print(f'indice shape:', indices.shape, 'last choice :', indices[-1])
