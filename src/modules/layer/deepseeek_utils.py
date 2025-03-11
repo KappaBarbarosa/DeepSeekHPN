@@ -331,8 +331,10 @@ class Gate(nn.Module):
         root = '/home/marl2024/DeepSeekHPN/results/gate_scores'
         if not os.path.exists(root):
             os.mkdir(root)
-
-        save_dir = os.path.join(root, self.args.name,self.args.device_name)
+        root = os.path.join(root, self.args.name)
+        if not os.path.exists(root):
+            os.mkdir(root)
+        save_dir = os.path.join(root,self.args.env_args['map_name'])
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
         plt.savefig(f'{save_dir}/{t_env}.png')
