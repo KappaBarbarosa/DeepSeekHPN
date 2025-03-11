@@ -59,7 +59,7 @@ class MoE(nn.Module):
         if self.count % self.log_interval == 0:
             # print(f'indices:', indices)
             # print(f'weights:', weights)
-            print(f'counts:', counts)
+            # print(f'counts:', counts)
             self.count=0
         self.count += 1
         for i in range(self.experts_start_idx, self.experts_end_idx):

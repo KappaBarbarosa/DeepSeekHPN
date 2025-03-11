@@ -6,6 +6,8 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import logging
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
 world_size = 1
 rank = 0
 block_size = 128
@@ -276,7 +278,7 @@ class Gate(nn.Module):
         self.topk_groups = args.n_limited_groups
         self.score_func = args.score_func
         self.route_scale = args.route_scale
-        self.weight = nn.Parameter(torch.empty(args.n_routed_experts, args.dim))
+        self.weight = nn.Linear(args.dim, args.n_routed_experts)
         self.bias = nn.Parameter(torch.empty(args.n_routed_experts)) if self.dim == 64 else None
         self.log_interval = 1
         self.count = 0
@@ -292,7 +294,7 @@ class Gate(nn.Module):
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: Routing weights and selected expert indices.
         """
-        scores = linear(x, self.weight)
+        scores = self.weight(x)
         if self.score_func == "softmax":
             scores = scores.softmax(dim=-1, dtype=torch.float32)
         else:
@@ -300,7 +302,6 @@ class Gate(nn.Module):
         original_scores = scores
         if self.bias is not None:
             scores = scores + self.bias
-
         self.score_history.append(scores[-1].detach().cpu().numpy())
         if self.count % self.log_interval == 0:
             # print(f'adding bias:', scores[-1])

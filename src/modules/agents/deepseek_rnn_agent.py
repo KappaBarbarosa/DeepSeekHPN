@@ -186,7 +186,6 @@ class DeepSeek_RNNAgent(nn.Module):
 
         obs_embedding = F.relu(embedding, inplace=True)
 
-        print()
         if self.cache is not None:
             # 取出 cache 中每個 sample 最後一個時間步的 embedding
             # last_embedding = self.cache[:, -1, :]  # shape: [bs, feature]
@@ -204,7 +203,9 @@ class DeepSeek_RNNAgent(nn.Module):
             self.cache = obs_embedding.unsqueeze(1).detach()
 
         # print()
+        
         hh = self.decoder(self.cache)  ## [bs * n_agents, rnn_hidden_dim]
+        # print(hh[0])
         # cache: concat
         # moe: share for common knowledge, other experts for finetuning, transfer learning is important
         # hpn: 
