@@ -76,5 +76,5 @@ beta_fast: 32
 beta_slow: 1
 mscale: 1.0
 
-use_wandb: False
+use_wandb: True
 

@@ -271,14 +271,14 @@ class Gate(nn.Module):
             args (ModelArgs): Model arguments containing gating parameters.
         """
         super().__init__()
-        self.dim = args.dim
+        self.dim = args.transformer_embed_dim
         self.args = args
         self.topk = args.n_activated_experts
         self.n_groups = args.n_expert_groups
         self.topk_groups = args.n_limited_groups
         self.score_func = args.score_func
         self.route_scale = args.route_scale
-        self.weight = nn.Linear(args.dim, args.n_routed_experts)
+        self.weight = nn.Linear(self.dim, args.n_routed_experts)
         self.bias = nn.Parameter(torch.empty(args.n_routed_experts)) if self.dim == 64 else None
         self.log_interval = 1
         self.count = 0

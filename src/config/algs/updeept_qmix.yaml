@@ -1,0 +1,57 @@
+# --- QMIX specific parameters ---
+
+# use epsilon greedy action selector
+action_selector: "epsilon_greedy"
+epsilon_start: 1.0
+epsilon_finish: 0.05
+epsilon_anneal_time: 100000 # 500000 for 6h_vs_8z
+
+runner: "parallel"
+batch_size_run: 8
+buffer_size: 5000
+batch_size: 128
+
+t_max: 10050000
+
+# update the target network every {} episodes
+target_update_interval: 200
+
+# use the Q_Learner to train
+mac: "updet_mac"
+agent: "updeept_agent"
+
+agent_output_type: q
+# %%%%%%%%%%%%% Transformer Settings %%%%%%%%%%%
+transformer_embed_dim: 32
+moe_inter_dim: 48
+n_routed_experts: 6
+n_shared_experts: 1
+n_activated_experts:  1
+n_expert_groups:  1
+n_limited_groups:  1
+transformer_heads: 3  # head number of transformer
+transformer_depth: 2  # block number of transformer
+use_moe: True
+
+learner: "nq_learner"
+mixer: "qmix"
+mixing_embed_dim: 32
+hypernet_embed: 64
+lr: 0.001 # Learning rate for agents
+td_lambda: 0.6
+optimizer: 'adam'
+q_lambda: False
+
+use_wandb: True
+
+name: "updeept_qmix_48_6"
+
+score_func: "softmax"
+
+############# others
+route_scale: 1.0
+rope_theta: 10000.0
+rope_factor: 40
+beta_fast: 32
+beta_slow: 1
+mscale: 1.0

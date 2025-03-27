@@ -26,16 +26,14 @@ class MoE(nn.Module):
             args (ModelArgs): Model arguments containing MoE parameters.
         """
         super().__init__()
-        self.dim = args.dim
+        self.dim = args.transformer_embed_dim
         self.n_routed_experts = args.n_routed_experts
         self.n_local_experts = args.n_routed_experts 
         self.n_activated_experts = args.n_activated_experts
-        self.experts_start_idx = 0
-        self.experts_end_idx = self.experts_start_idx + self.n_local_experts
         self.gate = Gate(args)
-        self.experts = nn.ModuleList([Expert(args.dim, args.moe_inter_dim) if self.experts_start_idx <= i < self.experts_end_idx else None
+        self.experts = nn.ModuleList([Expert(self.dim, args.moe_inter_dim) 
                                       for i in range(self.n_routed_experts)])
-        self.shared_experts = MLP(args.dim, args.n_shared_experts * args.moe_inter_dim)
+        self.shared_experts = MLP(self.dim, args.n_shared_experts * args.moe_inter_dim)
         self.log_interval = 1
         self.count = 0
 
@@ -62,7 +60,7 @@ class MoE(nn.Module):
             # print(f'counts:', counts)
             self.count=0
         self.count += 1
-        for i in range(self.experts_start_idx, self.experts_end_idx):
+        for i in range(self.n_routed_experts):
             if counts[i] == 0:
                 continue
             expert = self.experts[i]
