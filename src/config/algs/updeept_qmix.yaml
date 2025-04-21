@@ -55,3 +55,7 @@ rope_factor: 40
 beta_fast: 32
 beta_slow: 1
 mscale: 1.0
+
+transfer: True
+freeze_shared_expert: False
+checkpoint_path: "/home/marl2024/DeepSeekHPN/results/models/sc2_3s_vs_3z-obs_aid=1-obs_act=1/algo=updeept_qmix_48_6-agent=updeept_agent/env_n=8/rnn_dim=64-2bs=5000_128-tdlambda=0.6-epdec_0.05=100k/updeept_qmix_48_6__2025-03-27_16-50-21"

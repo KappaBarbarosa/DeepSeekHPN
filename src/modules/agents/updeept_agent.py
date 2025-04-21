@@ -178,6 +178,10 @@ class Transformer(nn.Module):
 
         x = self.toprobs(x.view(b * t, e)).view(b, t, self.num_tokens)  # torch.Size([5, 12, 32])
         return x, tokens
+    
+    def freeze_shared_experts(self):
+        for block in self.tblocks:
+            block.ff.shared_experts.requires_grad = False
 
 
 def mask_(matrices, maskval=0.0, mask_diagonal=True):

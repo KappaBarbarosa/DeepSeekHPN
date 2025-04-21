@@ -1,6 +1,10 @@
 export WANDB_API_KEY=247e23f9da34555c8f9d172474c4d49ad150e88d
 declare -A map_tmax_new
 map_tmax_new=(
+    ["3m"]=1000000
+    ["5m"]=1000000
+    ["7m"]=1000000
+    ["8m"]=1000000
     ["2s3z"]=1050000
     ["3s5z"]=2050000
     ["1c3s5z"]=2050000
@@ -17,7 +21,7 @@ map_tmax_new=(
     ["corridor"]=5050000
 )
 
-for map_name in "3s_vs_3z" "3s_vs_4z" "3s_vs_5z" "5m_vs_6m";
+for map_name in  "3s_vs_5z" ;
 do
     t_max=${map_tmax_new[$map_name]}
 
