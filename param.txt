@@ -1,1 +1,1 @@
-3s_vs_3z: Total parameters in agent: 136715
+10m_vs_11m: Total parameters in agent: 258058

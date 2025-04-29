@@ -1,5 +1,6 @@
 import copy
 import time
+import json
 
 import torch as th
 from torch.optim import RMSprop, Adam
@@ -223,6 +224,14 @@ class NQLearner:
         if self.mixer is not None:
             th.save(self.mixer.state_dict(), "{}/mixer.th".format(path))
         th.save(self.optimiser.state_dict(), "{}/opt.th".format(path))
+        
+        # 加上 agent 的 state_dict
+        th.save(self.mac.agent.state_dict(), f"{path}/agent.th")
+
+        # 儲存 config（特別是 slot 數）
+        import json
+        with open(f"{path}/args.json", "w") as f:
+            json.dump(vars(self.args), f, indent=2)
 
     def load_models(self, path):
         self.mac.load_models(path)
