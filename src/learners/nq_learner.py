@@ -60,6 +60,13 @@ class NQLearner:
         self.last_target_update_episode = 0
         self.device = th.device('cuda' if args.use_cuda else 'cpu')
         print("Using device: {}".format(self.device))
+        if args.freeze == 'shared':
+            self.mac.agent.freeze_shared_experts()
+        elif args.freeze == 'all_experts':
+            self.mac.agent.freeze_all_experts()
+        elif args.freeze == 'part':
+            self.mac.agent.freeze_part_experts()
+            
         self.params = list(mac.parameters())
 
         if args.mixer == "qatten":
@@ -237,6 +244,8 @@ class NQLearner:
         self.mac.load_models(path)
         # Not quite right but I don't want to save target networks
         self.target_mac.load_models(path)
+        if self.args.transfer:
+            return
         if self.mixer is not None:
             self.mixer.load_state_dict(th.load("{}/mixer.th".format(path), map_location=lambda storage, loc: storage))
         self.optimiser.load_state_dict(th.load("{}/opt.th".format(path), map_location=lambda storage, loc: storage))

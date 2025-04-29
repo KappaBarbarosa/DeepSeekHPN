@@ -94,16 +94,7 @@ class DeepSeek_RNNAgent(nn.Module):
 
 
         self.initial_embedding = None
-        self.merge_mlp = nn.Sequential(
-            nn.Linear(self.rnn_hidden_dim * 2, self.mlp_hidden_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(self.mlp_hidden_dim, self.rnn_hidden_dim)
-        )
         self.decoder = Transformer(args)    
-        num_decoder_params = sum(p.numel() for p in self.decoder.parameters())
-        num_mlp_params = sum(p.numel() for p in self.merge_mlp.parameters())
-        print(f"Number of parameters in self.decoder: {num_decoder_params}")
-        print(f"Number of parameters in self merge mlp: {num_mlp_params}") 
         # Reset parameters for hypernets
         # self._reset_hypernet_parameters(init_type="xavier")
         # self._reset_hypernet_parameters(init_type="kaiming")
@@ -194,16 +185,27 @@ class DeepSeek_RNNAgent(nn.Module):
         )  # [bs * n_agents, head, rnn_hidden_dim]
 
         obs_embedding = F.relu(embedding, inplace=True)
-        if self.initial_embedding.shape[0] != bs*self.n_agents:
-            self._reset_initial_embedding(bs)
-        current_embedding = self.merge_mlp(th.cat([obs_embedding, self.initial_embedding], dim=-1)) # [bs * n_agents, rnn_hidden_dim]
-        if self.cache is None:
-            self.cache = current_embedding.unsqueeze(1)
+
+        if self.cache is not None:
+            # 取出 cache 中每個 sample 最後一個時間步的 embedding
+            # last_embedding = self.cache[:, -1, :]  # shape: [bs, feature]
+            # # 計算每個 sample 當前步與上一個步的 Euclidean 距離
+            # euclidean_distance = th.norm(obs_embedding - last_embedding, dim=-1)
+            
+            # print("Last embedding (first sample):", last_embedding[0, :10])
+            # print("Current obs embedding (first sample):", obs_embedding[0, :10])
+            # print("Euclidean Distance of obs embedding(max/mean/min):", euclidean_distance.max(), euclidean_distance.mean(), euclidean_distance.min())
+            
+            # 將當前步的 embedding 加入 cache，unsqueeze 在時間步維度 (dim=1)
+            self.cache = th.cat([self.cache, obs_embedding.unsqueeze(1).detach()], dim=1)
         else:
-            self.cache = th.cat([self.cache, current_embedding.unsqueeze(1)], dim=-2) ## [bs * n_agents, timestep, rnn_hidden_dim]
-        # print("cache shape:", self.cache.shape)
+            # print("Cache is empty, initializing with current step embeddings.")
+            self.cache = obs_embedding.unsqueeze(1).detach()
+
+        # print()
+        
         hh = self.decoder(self.cache)  ## [bs * n_agents, rnn_hidden_dim]
-        self.initial_embedding = hh.clone().detach()
+        # print(hh[0])
         # cache: concat
         # moe: share for common knowledge, other experts for finetuning, transfer learning is important
         # hpn: 

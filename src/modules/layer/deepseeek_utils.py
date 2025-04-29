@@ -6,6 +6,8 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import logging
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
 world_size = 1
 rank = 0
 block_size = 128
@@ -269,14 +271,14 @@ class Gate(nn.Module):
             args (ModelArgs): Model arguments containing gating parameters.
         """
         super().__init__()
-        self.dim = args.dim
+        self.dim = args.transformer_embed_dim
         self.args = args
         self.topk = args.n_activated_experts
         self.n_groups = args.n_expert_groups
         self.topk_groups = args.n_limited_groups
         self.score_func = args.score_func
         self.route_scale = args.route_scale
-        self.weight = nn.Parameter(torch.empty(args.n_routed_experts, args.dim))
+        self.weight = nn.Linear(self.dim, args.n_routed_experts)
         self.bias = nn.Parameter(torch.empty(args.n_routed_experts)) if self.dim == 64 else None
         self.log_interval = 1
         self.count = 0
@@ -292,7 +294,7 @@ class Gate(nn.Module):
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: Routing weights and selected expert indices.
         """
-        scores = linear(x, self.weight)
+        scores = self.weight(x)
         if self.score_func == "softmax":
             scores = scores.softmax(dim=-1, dtype=torch.float32)
         else:
@@ -300,10 +302,9 @@ class Gate(nn.Module):
         original_scores = scores
         if self.bias is not None:
             scores = scores + self.bias
-
         self.score_history.append(scores[-1].detach().cpu().numpy())
         if self.count % self.log_interval == 0:
-            print(f'scores:', scores[-1])
+            # print(f'adding bias:', scores[-1])
             self.count = 0
         self.count += 1
         indices = torch.topk(scores, self.topk, dim=-1)[1]
@@ -328,8 +329,14 @@ class Gate(nn.Module):
         plt.ylabel('Gate Score')
         plt.title('Gate Score over Training Iterations')
         plt.legend()
-        save_dir = f'/home/marl2024/DeepSeek_HPN/results/gate_scores/{self.args.name}'
+        root = '/home/marl2024/DeepSeekHPN/results/gate_scores'
+        if not os.path.exists(root):
+            os.mkdir(root)
+        root = os.path.join(root, self.args.name)
+        if not os.path.exists(root):
+            os.mkdir(root)
+        save_dir = os.path.join(root,self.args.env_args['map_name'])
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
-        plt.savefig(f'{save_dir}/{t_env}_gate_scores.png')
+        plt.savefig(f'{save_dir}/{t_env}.png')
         plt.close()

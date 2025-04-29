@@ -98,10 +98,8 @@ class Transformer(nn.Module):
         mask = None
         if seqlen > 1:
             mask = torch.full((seqlen, seqlen), float("-inf"), device=h.device).triu_(1)
-        # print("before layer:", h[0])
         for layer in self.layers:
             h = layer(h, start_pos, freqs_cis, mask)
-        # print("after layer:", h[0])
         h = self.norm(h)[:, -1]
         logits = self.head(h)
 

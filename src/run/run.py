@@ -211,12 +211,10 @@ def run_sequential(args, logger):
     # Setup multiagent controller here
     mac = mac_REGISTRY[args.mac](buffer.scheme, groups, args)
     # Calculate mac.agent parameters and save to param.txt
-    agent_params = sum(p.numel() for p in mac.agent.parameters())
-    for name, param in mac.agent.named_parameters():
-        print(f"{name}: shape = {param.shape}, parameters = {param.numel()}")
-
-    with open("param.txt", "w") as f:
-        f.write(f"{args.env_args['map_name']}: Total parameters in agent: {agent_params}\n")
+    total_params = sum(p.numel() for p in mac.parameters())
+    # with open("para.txt", "a") as f:
+    #     f.write(f"{args.name} {args.env_args['map_name']}: {total_params}\n")
+    # return
 
     # Give runner the scheme
     runner.setup(scheme=scheme, groups=groups, preprocess=preprocess, mac=mac)
@@ -253,7 +251,9 @@ def run_sequential(args, logger):
 
         logger.console_logger.info("Loading model from {}".format(model_path))
         learner.load_models(model_path)
-        runner.t_env = timestep_to_load
+        if args.transfer is False:
+        
+            runner.t_env = timestep_to_load
 
         if args.evaluate or args.save_replay:
             evaluate_sequential(args, runner)
