@@ -4,6 +4,7 @@ import torch
 import argparse
 import torch as th
 from modules.layer.deepseek_moe import MoE
+from modules.layer.deepseek_moe import Expert
 
 class UPDeepT(nn.Module):
     def __init__(self, input_shape, args):
@@ -18,6 +19,23 @@ class UPDeepT(nn.Module):
     def init_hidden(self):
         # make hidden states on same device as model
         return self.q_basic.weight.new(1, self.args.transformer_embed_dim).zero_()
+
+    def freeze_shared_experts(self):
+        for block in self.transformer.tblocks:
+            block.ff.shared_experts.requires_grad = False
+
+    def freeze_all_experts(self):
+        for block in self.transformer.tblocks:
+            block.ff.shared_experts.requires_grad = False
+            block.ff.experts.requires_grad = False
+
+    def freeze_part_experts(self):
+        keep_ids = self.args.keep_experts
+        for block in self.transformer.tblocks:
+            for i in range(self.args.n_routed_experts):
+                block.ff.experts[i].requires_grad = i in keep_ids
+            block.ff.shared_experts.requires_grad = False
+        self.transformer.add_additional_experts()
 
     def forward(self, inputs, hidden_state):
         # (bs * n_agents, 1, transformer_embed_dim]
@@ -128,6 +146,10 @@ class TransformerBlock(nn.Module):
         ) 
         self.do = nn.Dropout(dropout)
 
+    def add_additional_experts(self):
+        for block in self.ff.experts:
+            block.add_additional_experts()
+
     def forward(self, x_mask):
         x, mask = x_mask
         attended = self.attention(x, mask)
@@ -179,9 +201,6 @@ class Transformer(nn.Module):
         x = self.toprobs(x.view(b * t, e)).view(b, t, self.num_tokens)  # torch.Size([5, 12, 32])
         return x, tokens
     
-    def freeze_shared_experts(self):
-        for block in self.tblocks:
-            block.ff.shared_experts.requires_grad = False
 
 
 def mask_(matrices, maskval=0.0, mask_diagonal=True):

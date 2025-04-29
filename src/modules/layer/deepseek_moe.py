@@ -36,6 +36,14 @@ class MoE(nn.Module):
         self.shared_experts = MLP(self.dim, args.n_shared_experts * args.moe_inter_dim)
         self.log_interval = 1
         self.count = 0
+    
+    def add_additional_experts(self):
+        """
+        Adds additional experts to the MoE module.
+        This is a placeholder for future implementations.
+        """
+        for i in range(self.n_additional_experts):
+            self.experts.append(Expert(self.dim, self.n_local_experts * self.moe_inter_dim))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """

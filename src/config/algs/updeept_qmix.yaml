@@ -44,7 +44,7 @@ q_lambda: False
 
 use_wandb: True
 
-name: "updeept_qmix_48_6"
+name: "updeept_qmix_48_6 transfer from 3m freeze shared expert"
 
 score_func: "softmax"
 

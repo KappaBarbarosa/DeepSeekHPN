@@ -59,8 +59,12 @@ class NQLearner:
         self.last_target_update_episode = 0
         self.device = th.device('cuda' if args.use_cuda else 'cpu')
         print("Using device: {}".format(self.device))
-        if args.freeze_shared_expert:
+        if args.freeze == 'shared':
             self.mac.agent.freeze_shared_experts()
+        elif args.freeze == 'all_experts':
+            self.mac.agent.freeze_all_experts()
+        elif args.freeze == 'part':
+            self.mac.agent.freeze_part_experts()
             
         self.params = list(mac.parameters())
 
