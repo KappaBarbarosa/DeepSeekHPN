@@ -4,7 +4,7 @@ from modules.agents import REGISTRY as agent_REGISTRY
 from components.action_selectors import REGISTRY as action_REGISTRY
 import torch as th
 from utils.th_utils import get_parameters_num
-
+from collections import defaultdict
 
 # This multi-agent controller shares parameters between agents
 class BasicMAC:
@@ -17,7 +17,7 @@ class BasicMAC:
 
         self.action_selector = action_REGISTRY[args.action_selector](args)
         self.save_probs = getattr(self.args, 'save_probs', False)
-
+        self.stats_by_layer = defaultdict(list)
         self.hidden_states = None
         if getattr(self.args, "transfer_checkpoint_path", None):
             if self.args.transfer:
@@ -35,7 +35,10 @@ class BasicMAC:
     def forward(self, ep_batch, t, test_mode=False):
         agent_inputs = self._build_inputs(ep_batch, t)
         avail_actions = ep_batch["avail_actions"][:, t]
-        agent_outs, self.hidden_states = self.agent(agent_inputs, self.hidden_states)
+        agent_outs, self.hidden_states,stats = self.agent(agent_inputs, self.hidden_states)
+        if stats:
+            for lid, stats in stats.items():
+             self.stats_by_layer[lid].append(stats)   # 直接塞進 dict(list)
         # print("agents_out:", agent_outs[0])
         # print("hidden_states:", self.hidden_states[0])
         # Softmax the agent outputs if they're policy logits
@@ -55,6 +58,11 @@ class BasicMAC:
         if self.hidden_states is not None:
             self.hidden_states = self.hidden_states.unsqueeze(0).expand(batch_size, self.n_agents, -1)  # bav
 
+    def pop_router_stats(self):
+        stats = self.stats_by_layer
+        self.stats_by_layer = defaultdict(list)
+        return stats
+    
     def set_train_mode(self):
         self.agent.train()
 
@@ -116,7 +124,11 @@ class BasicMAC:
             self.agent.load_state_dict(model_state)
             print("Model loaded successfully.")
         else:
-            self.agent.load_state_dict(loaded_state)
+            missing_keys, unexpected_keys = self.agent.load_state_dict(loaded_state, strict=False)
+            if missing_keys:
+                print(f"Warning: Missing keys in state_dict: {missing_keys}")
+            if unexpected_keys:
+                print(f"Warning: Unexpected keys in state_dict: {unexpected_keys}")
             print("Model loaded successfully.")
         
         if transfer and freeze_old:

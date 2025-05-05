@@ -303,7 +303,7 @@ class MoEGate(nn.Module):
         hidden_states = hidden_states.view(-1, h)
         logits = F.linear(hidden_states, self.weight, None)
         if self.scoring_func == 'softmax':
-            scores = logits.softmax(dim=-1)
+            scores = logits.softmax(dim=-1).detach()
         else:
             raise NotImplementedError(f'insupportable scoring function for MoE gating: {self.scoring_func}')
         
