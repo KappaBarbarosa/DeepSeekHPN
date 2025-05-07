@@ -1,5 +1,6 @@
 import copy
 import time
+import json
 
 import torch as th
 from torch.optim import RMSprop, Adam
@@ -59,8 +60,13 @@ class NQLearner:
         self.last_target_update_episode = 0
         self.device = th.device('cuda' if args.use_cuda else 'cpu')
         print("Using device: {}".format(self.device))
-        if args.freeze_shared_expert:
-            self.mac.agent.freeze_shared_experts()
+        if self.args.transfer:
+            if args.freeze == 'shared':
+                self.mac.agent.freeze_shared_experts()
+            elif args.freeze == 'all_experts':
+                self.mac.agent.freeze_all_experts()
+            elif args.freeze == 'part':
+                self.mac.agent.freeze_part_experts()
             
         self.params = list(mac.parameters())
 
@@ -179,13 +185,40 @@ class NQLearner:
 
         mask_elems = mask.sum()
         loss = masked_td_error.sum() / mask_elems
+        print("loss", loss.item())
+        
+        # print("loss", loss.item())
+        router_stats = self.mac.pop_router_stats()
+        with th.no_grad():
+            for lid, stats_list in router_stats.items():                                 # ← 斷梯度
+                probs = th.cat([s["probs"] for s in stats_list], 0)  # 仍在 CPU
+                idx   = th.cat([s["indices"] for s in stats_list], 0)
 
+                E   = probs.size(1)
+                p_e = probs.sum(0);  p_e = p_e / p_e.sum()
+                L_imp = E * (p_e ** 2).sum()
+
+                tok_cnt  = th.bincount(idx.flatten(), minlength=E).float()
+                tok_frac = tok_cnt / tok_cnt.sum()
+                L_cap = E * (tok_frac ** 2).sum()
+
+                moe_loss_layer = (L_imp + L_cap).to(self.device)   # 只把標量搬到 GPU
+                # print(f"Layer {lid} Imp Loss: {L_imp.item()}, Cap Loss: {L_cap.item()}")
+                loss += moe_loss_layer * self.args.moe_coef          # ← 累加進總損失
+
+            # -------- Loss‑Free 動態偏置更新 --------
+            target = tok_cnt.mean()
+            gate   = self.mac.agent.transformer.tblocks[lid].ff.gate
+            
+            gate.update_dyn_bias(tok_cnt, target, gamma=self.args.bias_gamma)
         # Optimise
         self.optimiser.zero_grad()
         loss.backward()
         grad_norm = th.nn.utils.clip_grad_norm_(self.params, self.args.grad_norm_clip)
         self.optimiser.step()
 
+
+        
         self.train_t += 1
         self.avg_time += (time.time() - start_time - self.avg_time) / self.train_t
         print("Avg cost {} seconds".format(self.avg_time))
@@ -226,6 +259,14 @@ class NQLearner:
         if self.mixer is not None:
             th.save(self.mixer.state_dict(), "{}/mixer.th".format(path))
         th.save(self.optimiser.state_dict(), "{}/opt.th".format(path))
+        
+        # 加上 agent 的 state_dict
+        th.save(self.mac.agent.state_dict(), f"{path}/agent.th")
+
+        # 儲存 config（特別是 slot 數）
+        import json
+        with open(f"{path}/args.json", "w") as f:
+            json.dump(vars(self.args), f, indent=2)
 
     def load_models(self, path):
         self.mac.load_models(path)

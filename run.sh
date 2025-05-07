@@ -21,16 +21,16 @@ map_tmax_new=(
     ["corridor"]=5050000
 )
 
-for map_name in  "3s_vs_5z" ;
+for map_name in "3s_vs_3z" "3s_vs_4z" "3s_vs_5z" 
 do
     t_max=${map_tmax_new[$map_name]}
 
     # 在不同 GPU 上同時執行
     export CUDA_VISIBLE_DEVICES=0
-    python3 src/main.py --config=updeept_qmix --env-config=sc2 with env_args.map_name=$map_name  t_max=$t_max device_name=0 > /dev/null & 
+    python3 src/main.py --config=updeept_qmix --env-config=sc2 with env_args.map_name=$map_name  t_max=$t_max device_name=0  > /dev/null & 
 
-    export CUDA_VISIBLE_DEVICES=1
-    python3 src/main.py --config=updeept_qmix --env-config=sc2 with env_args.map_name=$map_name  t_max=$t_max device_name=1 > /dev/null & 
+    # export CUDA_VISIBLE_DEVICES=1
+    # python3 src/main.py --config=updeept_qmix --env-config=sc2 with env_args.map_name=$map_name  t_max=$t_max device_name=1 > /dev/null & 
 
     wait
 done

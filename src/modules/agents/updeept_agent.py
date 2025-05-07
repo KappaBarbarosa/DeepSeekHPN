@@ -4,6 +4,7 @@ import torch
 import argparse
 import torch as th
 from modules.layer.deepseek_moe import MoE
+from modules.layer.deepseek_moe import Expert
 
 class UPDeepT(nn.Module):
     def __init__(self, input_shape, args):
@@ -19,13 +20,30 @@ class UPDeepT(nn.Module):
         # make hidden states on same device as model
         return self.q_basic.weight.new(1, self.args.transformer_embed_dim).zero_()
 
+    def freeze_shared_experts(self):
+        for block in self.transformer.tblocks:
+            block.ff.shared_experts.requires_grad = False
+
+    def freeze_all_experts(self):
+        for block in self.transformer.tblocks:
+            block.ff.shared_experts.requires_grad = False
+            block.ff.experts.requires_grad = False
+
+    def freeze_part_experts(self):
+        keep_ids = self.args.keep_experts
+        for block in self.transformer.tblocks:
+            for i in range(self.args.n_routed_experts):
+                block.ff.experts[i].requires_grad = i in keep_ids
+            block.ff.shared_experts.requires_grad = False
+        self.transformer.add_additional_experts()
+
     def forward(self, inputs, hidden_state):
         # (bs * n_agents, 1, transformer_embed_dim]
         hidden_state = hidden_state.reshape(-1, 1, self.args.transformer_embed_dim)
 
         # transformer-out: torch.Size([b * n_agents, 1+n_enemies+(n_agents-1)+1, transformer_embed_dim])
         # in dim 1: self_fea_att_value, m enemy_fea_att_value, n-1 ally_fea_att_value, hidden_state
-        outputs, _ = self.transformer.forward(
+        outputs, _, all_stats = self.transformer.forward(
             inputs, hidden_state, None)
 
         # first output for 6 action (no_op stop up down left right)
@@ -51,7 +69,7 @@ class UPDeepT(nn.Module):
         # concat basic action Q with enemy attack Q
         q = torch.cat((q_basic_actions, q_enemies), 1)
 
-        return q, h  # [bs * n_agents, 6 + n_enemies], this shape will be reshaped to  [bs, n_agents, 6 + n_enemies] in forward() of the BasicMAC
+        return q, h, all_stats  # [bs * n_agents, 6 + n_enemies], this shape will be reshaped to  [bs, n_agents, 6 + n_enemies] in forward() of the BasicMAC
 
 
 class SelfAttention(nn.Module):
@@ -117,6 +135,7 @@ class TransformerBlock(nn.Module):
         super(TransformerBlock, self).__init__()
         emb = args.transformer_embed_dim
         heads = args.transformer_heads
+        self.gate = args.gate
         self.attention = SelfAttention(emb, heads=heads, mask=mask)
         self.mask = mask
         self.norm1 = nn.LayerNorm(emb)
@@ -128,15 +147,26 @@ class TransformerBlock(nn.Module):
         ) 
         self.do = nn.Dropout(dropout)
 
+    def add_additional_experts(self):
+        for block in self.ff.experts:
+            block.add_additional_experts()
+
     def forward(self, x_mask):
         x, mask = x_mask
         attended = self.attention(x, mask)
         x = self.norm1(attended + x)
         x = self.do(x)
-        fedforward = self.ff(x)
+        if self.gate == 'v1':
+            fedforward = self.ff(x, mask)
+        else:
+            fedforward,stats = self.ff(x)
         x = self.norm2(fedforward + x)
         x = self.do(x)
-        return x, mask
+        if self.gate == 'v1':
+            return x, mask
+    
+        else:
+            return x, mask, stats
 
 
 class Transformer(nn.Module):
@@ -146,17 +176,21 @@ class Transformer(nn.Module):
         emb = args.transformer_embed_dim
         output_dim = args.transformer_embed_dim
         self.num_tokens = output_dim
+        self.gate = args.gate
 
         self.input_shapes = input_shapes  # (5, (6, 5), (4, 5)) for 5m vs 6m
         # use the max_dim to init the token layer (to support all maps)
         token_dim = max([input_shapes[0], input_shapes[1][-1], input_shapes[2][-1]])
         self.token_embedding = nn.Linear(token_dim, emb)
 
-        tblocks = []
-        for i in range(args.transformer_depth):
-            tblocks.append(TransformerBlock(args, mask=False))
-        self.tblocks = nn.Sequential(*tblocks)
+        self.tblocks = nn.ModuleList([            # ← 換成 ModuleList
+            TransformerBlock(args, mask=False) for _ in range(args.transformer_depth)
+        ])
         self.toprobs = nn.Linear(emb, output_dim)
+    
+    def add_additional_experts(self):
+        for block in self.tblocks:
+            block.ff.add_additional_experts()
 
     def forward(self, inputs, h, mask):
         """
@@ -167,21 +201,25 @@ class Transformer(nn.Module):
         :return:
         """
         tokens = self.token_embedding(inputs) # (bs * n_agents, 1 + n_enemies + (n_agents-1), emb)
-
+        all_stats = {}
         # Append hidden state to the end
         tokens = torch.cat((tokens, h), 1)  # tokens+h: torch.Size([5, 12, 32])
 
         b, t, e = tokens.size()
-
-        x, mask = self.tblocks((tokens, mask))
+        x, cur_mask = tokens, mask
+        if self.gate == 'v1':
+            for lid, block in enumerate(self.tblocks):
+                x, cur_mask = block((x, cur_mask))
+        else:
+            for lid, block in enumerate(self.tblocks):
+                x, cur_mask, stats = block((x, cur_mask))
+                if stats is not None:                 # 加上層號方便 Learner 分桶
+                    all_stats[lid] = stats
         # print("transformer-out:", x.shape)  # transformer-out: torch.Size([5, 12, 32])
 
         x = self.toprobs(x.view(b * t, e)).view(b, t, self.num_tokens)  # torch.Size([5, 12, 32])
-        return x, tokens
+        return x, tokens, all_stats 
     
-    def freeze_shared_experts(self):
-        for block in self.tblocks:
-            block.ff.shared_experts.requires_grad = False
 
 
 def mask_(matrices, maskval=0.0, mask_diagonal=True):
@@ -189,23 +227,3 @@ def mask_(matrices, maskval=0.0, mask_diagonal=True):
     indices = torch.triu_indices(h, w, offset=0 if mask_diagonal else 1)
     matrices[:, indices[0], indices[1]] = maskval
 
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Unit Testing')
-    parser.add_argument('--token_dim', default='5', type=int)
-    parser.add_argument('--emb', default='32', type=int)
-    parser.add_argument('--heads', default='3', type=int)
-    parser.add_argument('--depth', default='2', type=int)
-    parser.add_argument('--ally_num', default='5', type=int)
-    parser.add_argument('--enemy_num', default='5', type=int)
-    parser.add_argument('--episode', default='20', type=int)
-    args = parser.parse_args()
-
-    # testing the agent
-    agent = UPDeT(None, args).cuda()
-    hidden_state = agent.init_hidden().cuda().expand(args.ally_num, 1, -1)
-    tensor = torch.rand(args.ally_num, args.ally_num + args.enemy_num, args.token_dim).cuda()
-    q_list = []
-    for _ in range(args.episode):
-        q, hidden_state = agent.forward(tensor, hidden_state, args.ally_num, args.enemy_num)
-        q_list.append(q)

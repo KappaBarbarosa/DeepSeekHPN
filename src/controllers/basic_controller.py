@@ -4,7 +4,7 @@ from modules.agents import REGISTRY as agent_REGISTRY
 from components.action_selectors import REGISTRY as action_REGISTRY
 import torch as th
 from utils.th_utils import get_parameters_num
-
+from collections import defaultdict
 
 # This multi-agent controller shares parameters between agents
 class BasicMAC:
@@ -17,8 +17,11 @@ class BasicMAC:
 
         self.action_selector = action_REGISTRY[args.action_selector](args)
         self.save_probs = getattr(self.args, 'save_probs', False)
-
+        self.stats_by_layer = defaultdict(list)
         self.hidden_states = None
+        if getattr(self.args, "transfer_checkpoint_path", None):
+            if self.args.transfer:
+                self.load_models(self.args.transfer_checkpoint_path)
 
     def select_actions(self, ep_batch, t_ep, t_env, bs=slice(None), test_mode=False):
         if t_ep == 0:
@@ -32,7 +35,10 @@ class BasicMAC:
     def forward(self, ep_batch, t, test_mode=False):
         agent_inputs = self._build_inputs(ep_batch, t)
         avail_actions = ep_batch["avail_actions"][:, t]
-        agent_outs, self.hidden_states = self.agent(agent_inputs, self.hidden_states)
+        agent_outs, self.hidden_states,stats = self.agent(agent_inputs, self.hidden_states)
+        if stats:
+            for lid, stats in stats.items():
+             self.stats_by_layer[lid].append(stats)   # 直接塞進 dict(list)
         # print("agents_out:", agent_outs[0])
         # print("hidden_states:", self.hidden_states[0])
         # Softmax the agent outputs if they're policy logits
@@ -52,6 +58,11 @@ class BasicMAC:
         if self.hidden_states is not None:
             self.hidden_states = self.hidden_states.unsqueeze(0).expand(batch_size, self.n_agents, -1)  # bav
 
+    def pop_router_stats(self):
+        stats = self.stats_by_layer
+        self.stats_by_layer = defaultdict(list)
+        return stats
+    
     def set_train_mode(self):
         self.agent.train()
 
@@ -77,7 +88,57 @@ class BasicMAC:
         th.save(self.agent.state_dict(), "{}/agent.th".format(path))
 
     def load_models(self, path):
-        self.agent.load_state_dict(th.load("{}/agent.th".format(path), map_location=lambda storage, loc: storage))
+        loaded_state = th.load("{}/agent.th".format(path), map_location=lambda storage, loc: storage)
+        assert isinstance(loaded_state, dict), "Loaded state must be a dictionary."
+        model_state = self.agent.state_dict()
+        
+        transfer = getattr(self.args, "transfer", False)
+        n_new_tokens = getattr(self.args, "n_new_tokens", 0)
+        assert isinstance(n_new_tokens, int) and n_new_tokens >= 0, "n_new_tokens must be a non-negative integer."
+        freeze_old = getattr(self.args, "freeze_old", False)
+        
+        if transfer and n_new_tokens > 0:
+            print(f"Transferring with {n_new_tokens} new tokens per Pattention layer...")
+        
+            for name, param in loaded_state.items():
+                print (name)
+            for name, param in loaded_state.items():
+                if "tokenformer" not in name:
+                    print(f"Skipped non-tokenformer param: {name}")
+                    continue
+                if name in model_state and isinstance(param, th.Tensor) and param.shape != model_state[name].shape:
+                    old_shape, new_shape = param.shape, model_state[name].shape
+                    assert len(old_shape) == len(new_shape), f"Shape mismatch: {name} has {old_shape} vs {new_shape}"
+                    if len(old_shape) == 2 and old_shape[0] < new_shape[0]:
+                        print(f"  Transferring: {name} from {old_shape} into {new_shape}")
+                        model_state[name][:old_shape[0], :] = param
+                    else:
+                        print(f"  Skipped mismatched param: {name} shape {old_shape} vs {new_shape}")
+                        assert model_state[name].shape == param.shape or transfer, f"Unexpected shape mismatch in {name}: loaded {param.shape}, expected {model_state[name].shape}"
+                        model_state[name][:] = param
+                elif name in model_state:
+                    model_state[name][:] = param
+                else:
+                    print(f"  Ignored extra param in loaded model: {name}")
+        
+            self.agent.load_state_dict(model_state)
+            print("Model loaded successfully.")
+        else:
+            missing_keys, unexpected_keys = self.agent.load_state_dict(loaded_state, strict=False)
+            if missing_keys:
+                print(f"Warning: Missing keys in state_dict: {missing_keys}")
+            if unexpected_keys:
+                print(f"Warning: Unexpected keys in state_dict: {unexpected_keys}")
+            print("Model loaded successfully.")
+        
+        if transfer and freeze_old:
+            print("Freezing transferred weights...")
+            for name, param in self.agent.named_parameters():
+                if name in loaded_state and "tokenformer" in name and any(dim == 2 and loaded_state[name].shape[0] < param.shape[0] for dim in [len(param.shape)]):
+                    param.requires_grad = True
+                    param.data[:loaded_state[name].shape[0],:] = loaded_state[name]
+                    param.requires_grad = False
+                    print(f"Froze first {loaded_state[name].shape[0]} tokens of: {name}")
 
     def _build_agents(self, input_shape):
         self.agent = agent_REGISTRY[self.args.agent](input_shape, self.args)

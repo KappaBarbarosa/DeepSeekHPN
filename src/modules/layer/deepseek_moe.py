@@ -29,13 +29,27 @@ class MoE(nn.Module):
         self.dim = args.transformer_embed_dim
         self.n_routed_experts = args.n_routed_experts
         self.n_local_experts = args.n_routed_experts 
+        self.n_additional_experts = args.n_additional_experts
         self.n_activated_experts = args.n_activated_experts
-        self.gate = Gate(args)
+        self.gate_mode = args.gate
+        if self.gate_mode == 'v1':
+            self.gate = Gate(args)
+        else:
+            self.gate = Gate_v2(args)
+        self.moe_inter_dim = args.moe_inter_dim
         self.experts = nn.ModuleList([Expert(self.dim, args.moe_inter_dim) 
                                       for i in range(self.n_routed_experts)])
         self.shared_experts = MLP(self.dim, args.n_shared_experts * args.moe_inter_dim)
         self.log_interval = 1
         self.count = 0
+    
+    def add_additional_experts(self):
+        """
+        Adds additional experts to the MoE module.
+        This is a placeholder for future implementations.
+        """
+        for i in range(self.n_additional_experts):
+            self.experts.append(Expert(self.dim, self.n_local_experts * self.moe_inter_dim))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -49,7 +63,11 @@ class MoE(nn.Module):
         """
         shape = x.size()
         x = x.view(-1, self.dim)
-        weights, indices = self.gate(x)
+        if self.gate_mode == 'v1':
+            weights, indices = self.gate(x, self.n_activated_experts)
+        else:
+            weights, indices, stats = self.gate(x,True)
+
         # print(f'indice shape:', indices.shape, 'last choice :', indices[-1])
         y = torch.zeros_like(x)
         
@@ -68,4 +86,6 @@ class MoE(nn.Module):
             y[idx] += expert(x[idx]) * weights[idx, top, None]
         z = self.shared_experts(x)
 
+        if self.gate_mode == 'v2':
+            return (y + z).view(shape), stats
         return (y + z).view(shape)

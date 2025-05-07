@@ -11,6 +11,8 @@ from .rnn_agent import RNNAgent
 from .updet_agent import UPDeT
 from .updeept_agent import UPDeepT
 from .deepseek_rnn_agent import DeepSeek_RNNAgent
+from .pattention_rnn_agent import Pattention_RNNAgent
+from .tokenformer_agent import TokenformerAgent
 
 REGISTRY["rnn"] = RNNAgent
 REGISTRY["n_rnn"] = NRNNAgent
@@ -23,3 +25,5 @@ REGISTRY["updeept_agent"] = UPDeepT
 REGISTRY["asn_rnn"] = AsnRNNAgent
 REGISTRY["gnn_rnn"] = GnnRNNAgent
 REGISTRY["deepseek_rnn"] = DeepSeek_RNNAgent
+REGISTRY["pattention_rnn"] = Pattention_RNNAgent
+REGISTRY["tokenformer"] = TokenformerAgent
