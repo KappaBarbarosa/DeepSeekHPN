@@ -35,8 +35,5 @@ td_lambda: 0.6
 optimizer: 'adam'
 q_lambda: False
 
-name: "updet_qmix large 16 freeze ff"
-use_wandb: True
-transfer: True
-freeze_shared_expert: True
-checkpoint_path: "/home/marl2025/DeepSeekHPN/results/models/sc2_3s_vs_3z-obs_aid=1-obs_act=1/algo=updet_qmix large 16-agent=updet_agent/env_n=8/rnn_dim=64-2bs=5000_128-tdlambda=0.6-epdec_0.05=100k/updet_qmix large 16__2025-04-24_16-03-58"
+name: "updet_qmix"
+freeze_shared_expert: False

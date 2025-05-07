@@ -55,6 +55,9 @@ class UPDeT(nn.Module):
 
         return q, h  # [bs * n_agents, 6 + n_enemies], this shape will be reshaped to  [bs, n_agents, 6 + n_enemies] in forward() of the BasicMAC
 
+    def freeze_shared_experts(self):
+        for block in self.transformer.tblocks:
+            block.ff.requires_grad = False
 
 class SelfAttention(nn.Module):
     def __init__(self, emb, heads=8, mask=False):
@@ -115,7 +118,7 @@ class SelfAttention(nn.Module):
 
 class TransformerBlock(nn.Module):
 
-    def __init__(self, emb, heads, mask, ff_hidden_mult=4, dropout=0.0):
+    def __init__(self, emb, heads, mask, ff_hidden_mult=16, dropout=0.0):
         super(TransformerBlock, self).__init__()
         self.attention = SelfAttention(emb, heads=heads, mask=mask)
         self.mask = mask
@@ -176,6 +179,7 @@ class Transformer(nn.Module):
 
         x = self.toprobs(x.view(b * t, e)).view(b, t, self.num_tokens)  # torch.Size([5, 12, 32])
         return x, tokens
+
 
 
 def mask_(matrices, maskval=0.0, mask_diagonal=True):
