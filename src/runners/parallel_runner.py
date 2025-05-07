@@ -117,7 +117,7 @@ class ParallelRunner:
                 actions, probs = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env,
                                                          bs=envs_not_terminated, test_mode=test_mode)
             else:
-                actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, bs=envs_not_terminated,
+                actions,stats = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, bs=envs_not_terminated,
                                                   test_mode=test_mode)
 
             cpu_actions = actions.to("cpu").numpy()
@@ -186,9 +186,18 @@ class ParallelRunner:
 
             if self.args.evaluate:
                 assert self.batch_size == 1
-                move = [["北", "南", "东", "西"][action - 2] if action > 1 and action < 6 else "action-{}".format(action)
-                        for action in cpu_actions[0]]
-                print(self.t, move, post_transition_data["reward"])
+                move = [["北", "南", "东", "西"][action - 2] if 1 < action < 6 else f"action-{action}" for action in cpu_actions[0]]
+                print(f"[t={self.t}] 動作: {move}, reward: {post_transition_data['reward']}")
+                
+                # 顯示 MoE 每層的 expert 分數（以 probs 為例）
+                for lid, stat in stats.items():
+                    probs = stat["probs"]  # (B, E)
+                    indices = stat["indices"]  # (B, K)
+                    print(f"  [Layer {lid}] Expert Scores (top-{indices.shape[1]}):")
+                    for b in range(probs.shape[0]):
+                        topk = indices[b].tolist()
+                        score = [round(float(probs[b][i]), 4) for i in topk]
+                        print(f"    Sample {b}: {list(zip(topk, score))}")
                 time.sleep(1)
 
             # Move onto the next timestep

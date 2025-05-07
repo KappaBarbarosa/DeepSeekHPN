@@ -35,6 +35,7 @@ class BasicMAC:
     def forward(self, ep_batch, t, test_mode=False):
         agent_inputs = self._build_inputs(ep_batch, t)
         avail_actions = ep_batch["avail_actions"][:, t]
+        stats = None
         agent_outs, self.hidden_states,stats = self.agent(agent_inputs, self.hidden_states)
         if stats:
             for lid, stats in stats.items():
@@ -51,7 +52,7 @@ class BasicMAC:
 
             agent_outs = th.nn.functional.softmax(agent_outs, dim=-1)
             
-        return agent_outs.view(ep_batch.batch_size, self.n_agents, -1)
+        return agent_outs.view(ep_batch.batch_size, self.n_agents, -1),stats
 
     def init_hidden(self, batch_size):
         self.hidden_states = self.agent.init_hidden()

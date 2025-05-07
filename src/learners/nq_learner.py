@@ -22,7 +22,7 @@ def calculate_target_q(target_mac, batch, enable_parallel_computing=False, threa
         target_mac_out = []
         target_mac.init_hidden(batch.batch_size)
         for t in range(batch.max_seq_length):
-            target_agent_outs = target_mac.forward(batch, t=t)
+            target_agent_outs,s = target_mac.forward(batch, t=t)
             target_mac_out.append(target_agent_outs)
 
         # We don't need the first timesteps Q-Value estimate for calculating targets
@@ -130,7 +130,7 @@ class NQLearner:
         if "deepseek" in self.args.agent:
             self.mac.agent.start_one_training()
         for t in range(batch.max_seq_length):
-            agent_outs = self.mac.forward(batch, t=t)
+            agent_outs,s = self.mac.forward(batch, t=t)
             mac_out.append(agent_outs)
         if "deepseek" in self.args.agent and (t_env - self.log_stats_t >= self.args.learner_log_interval):
             self.mac.agent.end_one_training(t_env)
