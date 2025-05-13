@@ -4,6 +4,7 @@ __pycache__/
 results/
 ./debug/
 *.zip
+*.png
 .DS_Store
 *.pyc
 .idea/

@@ -398,6 +398,16 @@ class Gate_v2(nn.Module):
             return weights, indices, stats
         return weights, indices
 
+    def start_one_training(self):
+        self.count = 0
+        self.score_history = []
+
+    def end_one_training(self, t_env):
+        if not self.score_history:
+            return
+        
+        
+        
     # --------------------------------------------------------------
     @torch.no_grad()
     def update_dyn_bias(self,

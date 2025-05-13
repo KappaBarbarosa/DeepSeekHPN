@@ -2,7 +2,7 @@ from envs import REGISTRY as env_REGISTRY
 from functools import partial
 from components.episode_buffer import EpisodeBatch
 from multiprocessing import Pipe, Process
-
+from collections import defaultdict
 import numpy as np
 import time
 import wandb
@@ -110,6 +110,7 @@ class ParallelRunner:
         final_env_infos = []  # may store extra stats like battle won. this is filled in ORDER OF TERMINATION
 
         save_probs = getattr(self.args, "save_probs", False)
+        action_expert_stat = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
         while True:
             # Pass the entire batch of experiences up till now to the agents
             # Receive the actions for each agent at this timestep in a batch for each un-terminated env
@@ -117,7 +118,7 @@ class ParallelRunner:
                 actions, probs = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env,
                                                          bs=envs_not_terminated, test_mode=test_mode)
             else:
-                actions,stats = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, bs=envs_not_terminated,
+                actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, bs=envs_not_terminated,
                                                   test_mode=test_mode)
 
             cpu_actions = actions.to("cpu").numpy()
@@ -183,22 +184,17 @@ class ParallelRunner:
 
             # Add post_transiton data into the batch
             self.batch.update(post_transition_data, bs=envs_not_terminated, ts=self.t, mark_filled=False)
-
+            stats = self.mac.pop_router_stats()  # get the stats from the MAC
             if self.args.evaluate:
                 assert self.batch_size == 1
                 move = [["北", "南", "东", "西"][action - 2] if 1 < action < 6 else f"action-{action}" for action in cpu_actions[0]]
                 print(f"[t={self.t}] 動作: {move}, reward: {post_transition_data['reward']}")
-                
+
                 # 顯示 MoE 每層的 expert 分數（以 probs 為例）
                 for lid, stat in stats.items():
-                    probs = stat["probs"]  # (B, E)
-                    indices = stat["indices"]  # (B, K)
-                    print(f"  [Layer {lid}] Expert Scores (top-{indices.shape[1]}):")
-                    for b in range(probs.shape[0]):
-                        topk = indices[b].tolist()
-                        score = [round(float(probs[b][i]), 4) for i in topk]
-                        print(f"    Sample {b}: {list(zip(topk, score))}")
-                time.sleep(1)
+                    print(lid, stat[0]['indices'].reshape(3,-1).tolist())
+                update_action_expert_stat(move, stats, action_expert_stat)
+                # time.sleep(1)
 
             # Move onto the next timestep
             self.t += 1
@@ -211,7 +207,8 @@ class ParallelRunner:
             all_terminated = all(terminated)
             if all_terminated:
                 break
-
+        
+        plot_action_expert_stat(action_expert_stat)
         if not test_mode:
             self.t_env += self.env_steps_this_run
 
@@ -319,3 +316,38 @@ class CloudpickleWrapper():
     def __setstate__(self, ob):
         import pickle
         self.x = pickle.loads(ob)
+
+
+def update_action_expert_stat(move, stats, action_expert_stat):
+    """
+    將一個 step 的 MoE routing 統計進結果表
+    - move: List[str]，長度為 agent 數，每個動作如 '北'
+    - stats: Dict[int, List[Dict]]，layer id → [{indices: Tensor}]
+    - action_expert_stat: 外部統計容器（會被更新）
+    """
+    for lid, stat_list in stats.items():
+        indices = stat_list[0]['indices'].tolist()  # shape: (agent_num, token_per_agent)
+        for move_name, expert_row in zip(move, indices):
+            for expert_id in expert_row:
+                action_expert_stat[move_name][lid][expert_id] += 1
+
+import matplotlib.pyplot as plt
+
+def plot_action_expert_stat(action_expert_stat):
+    for action, layer_data in action_expert_stat.items():
+        plt.figure()
+        expert_ids = sorted({eid for d in layer_data.values() for eid in d})
+        bar_width = 0.35
+        x = range(len(expert_ids))
+
+        for i, lid in enumerate(sorted(layer_data)):
+            counts = [layer_data[lid].get(eid, 0) for eid in expert_ids]
+            plt.bar([xi + i * bar_width for xi in x], counts, width=bar_width, label=f'Layer {lid}')
+
+        plt.xticks([xi + bar_width / 2 for xi in x], expert_ids)
+        plt.xlabel('Expert ID')
+        plt.ylabel('Count')
+        plt.title(f'Expert Usage for Action "{action}"')
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(f'action_expert_stat_{action}.png')

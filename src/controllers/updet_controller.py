@@ -10,10 +10,10 @@ class UPDETController(BasicMAC):
             self.set_evaluation_mode()
         # Only select actions for the selected batch elements in bs
         avail_actions = ep_batch["avail_actions"][:, t_ep]
-        agent_outputs,stats = self.forward(ep_batch, t_ep, test_mode=test_mode)
+        agent_outputs = self.forward(ep_batch, t_ep, test_mode=test_mode)
         chosen_actions = self.action_selector.select_action(agent_outputs[bs], avail_actions[bs], t_env,
                                                             test_mode=test_mode)
-        return chosen_actions,stats
+        return chosen_actions
 
     def _get_obs_shape(self):
         size = 0

@@ -11,9 +11,9 @@ epsilon_finish: 0.05
 epsilon_anneal_time: 100000 # 500000 for 6h_vs_8z
 
 runner: "parallel"
-batch_size_run: 8
+batch_size_run: 1
 buffer_size: 5000
-batch_size: 128
+batch_size: 1
 
 t_max: 10050000
 
@@ -46,7 +46,7 @@ td_lambda: 0.6
 optimizer: 'adam'
 q_lambda: False
 
-use_wandb: True
+use_wandb: False
 
 name: "updeept_qmix_48_6 transfer from 3m freeze part expert"
 
@@ -60,11 +60,12 @@ beta_fast: 32
 beta_slow: 1
 mscale: 1.0
 
-transfer: False
+transfer: True
+evaluate: True
 moe_coef: 0.001
 bias_gamma: 0.01
 gate: 'v2'
-# freeze: "part"
+freeze: "none"
 # keep_experts: [0,1]
 n_additional_experts: 2
-# checkpoint_path: "/home/marl2024/DeepSeek_HPN/results/models/sc2_3s_vs_3z-obs_aid=1-obs_act=1/algo=updeept_qmix_48_6-agent=updeept_agent/env_n=8/rnn_dim=64-2bs=5000_128-tdlambda=0.6-epdec_0.05=100k/updeept_qmix_48_6__2025-03-27_16-50-21"
+checkpoint_path: "/home/marl2024/DeepSeek_HPN/results/models/sc2_3s_vs_4z-obs_aid=1-obs_act=1/algo=updeept_qmix_48_6 v2 transfer from 3m freeze shared expert-agent=updeept_agent/env_n=8/rnn_dim=64-2bs=5000_128-tdlambda=0.6-epdec_0.05=100k/updeept_qmix_48_6 v2 transfer from 3m freeze shared expert__2025-05-06_10-37-17"

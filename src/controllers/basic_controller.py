@@ -37,9 +37,10 @@ class BasicMAC:
         avail_actions = ep_batch["avail_actions"][:, t]
         stats = None
         agent_outs, self.hidden_states,stats = self.agent(agent_inputs, self.hidden_states)
+        # print(stats)
         if stats:
-            for lid, stats in stats.items():
-             self.stats_by_layer[lid].append(stats)   # 直接塞進 dict(list)
+            for lid, stat in stats.items():
+             self.stats_by_layer[lid].append(stat)   # 直接塞進 dict(list)
         # print("agents_out:", agent_outs[0])
         # print("hidden_states:", self.hidden_states[0])
         # Softmax the agent outputs if they're policy logits
@@ -51,8 +52,8 @@ class BasicMAC:
                 agent_outs[reshaped_avail_actions == 0] = -1e10
 
             agent_outs = th.nn.functional.softmax(agent_outs, dim=-1)
-            
-        return agent_outs.view(ep_batch.batch_size, self.n_agents, -1),stats
+
+        return agent_outs.view(ep_batch.batch_size, self.n_agents, -1)
 
     def init_hidden(self, batch_size):
         self.hidden_states = self.agent.init_hidden()

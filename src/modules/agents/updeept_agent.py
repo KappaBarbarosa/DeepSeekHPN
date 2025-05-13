@@ -40,7 +40,7 @@ class UPDeepT(nn.Module):
     def forward(self, inputs, hidden_state):
         # (bs * n_agents, 1, transformer_embed_dim]
         hidden_state = hidden_state.reshape(-1, 1, self.args.transformer_embed_dim)
-
+        # print("hidden_state:", hidden_state.shape)  # hidden_state: torch.Size([5, 1, 32])
         # transformer-out: torch.Size([b * n_agents, 1+n_enemies+(n_agents-1)+1, transformer_embed_dim])
         # in dim 1: self_fea_att_value, m enemy_fea_att_value, n-1 ally_fea_att_value, hidden_state
         outputs, _, all_stats = self.transformer.forward(
@@ -203,7 +203,7 @@ class Transformer(nn.Module):
         tokens = self.token_embedding(inputs) # (bs * n_agents, 1 + n_enemies + (n_agents-1), emb)
         all_stats = {}
         # Append hidden state to the end
-        tokens = torch.cat((tokens, h), 1)  # tokens+h: torch.Size([5, 12, 32])
+        tokens = torch.cat((tokens, h), 1) 
 
         b, t, e = tokens.size()
         x, cur_mask = tokens, mask
