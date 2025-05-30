@@ -21,7 +21,7 @@ map_tmax_new=(
     ["corridor"]=5050000
 )
 
-for map_name in  "3s_vs_4z" 
+for map_name in  "3s_vs_3z" 
 do
     t_max=${map_tmax_new[$map_name]}
 

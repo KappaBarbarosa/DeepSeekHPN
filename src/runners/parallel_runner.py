@@ -318,36 +318,44 @@ class CloudpickleWrapper():
         self.x = pickle.loads(ob)
 
 
+def init_token_stat():
+    return [0] * 8  # 8 token slots per expert
+
 def update_action_expert_stat(move, stats, action_expert_stat):
     """
-    將一個 step 的 MoE routing 統計進結果表
-    - move: List[str]，長度為 agent 數，每個動作如 '北'
-    - stats: Dict[int, List[Dict]]，layer id → [{indices: Tensor}]
-    - action_expert_stat: 外部統計容器（會被更新）
+    精細統計每層每 expert 每 token slot 的使用次數
+    move: list[str] — 每個 agent 的動作
+    stats: Dict[layer_id, List[Dict]] — 各層 MoE routing 資訊
+    action_expert_stat: defaultdict(str -> layer -> expert -> token slot list)
     """
     for lid, stat_list in stats.items():
-        indices = stat_list[0]['indices'].tolist()  # shape: (agent_num, token_per_agent)
-        for move_name, expert_row in zip(move, indices):
-            for expert_id in expert_row:
-                action_expert_stat[move_name][lid][expert_id] += 1
+        indices = stat_list[0]['indices'].tolist()  # shape: (num_agents, 8))
+        for agent_idx, expert_row in enumerate(indices):
+            print(agent_idx, expert_row)
+            move_name = move[agent_idx]
+            for token_slot, expert_id in enumerate(expert_row):
+                # 初始化缺的結構
+                if expert_id not in action_expert_stat[move_name][lid]:
+                    action_expert_stat[move_name][lid][expert_id] = init_token_stat()
+                action_expert_stat[move_name][lid][expert_id][token_slot] += 1
 
 import matplotlib.pyplot as plt
 
 def plot_action_expert_stat(action_expert_stat):
     for action, layer_data in action_expert_stat.items():
-        plt.figure()
-        expert_ids = sorted({eid for d in layer_data.values() for eid in d})
-        bar_width = 0.35
-        x = range(len(expert_ids))
-
-        for i, lid in enumerate(sorted(layer_data)):
-            counts = [layer_data[lid].get(eid, 0) for eid in expert_ids]
-            plt.bar([xi + i * bar_width for xi in x], counts, width=bar_width, label=f'Layer {lid}')
-
-        plt.xticks([xi + bar_width / 2 for xi in x], expert_ids)
-        plt.xlabel('Expert ID')
-        plt.ylabel('Count')
-        plt.title(f'Expert Usage for Action "{action}"')
-        plt.legend()
+        num_layers = len(layer_data)
+        fig, axes = plt.subplots(1, num_layers, figsize=(6 * num_layers, 5), squeeze=False)
+        
+        for col, (lid, expert_data) in enumerate(sorted(layer_data.items())):
+            ax = axes[0][col]
+            for expert_id, token_counts in sorted(expert_data.items()):
+                ax.plot(range(8), token_counts, marker='o', label=f'Expert {expert_id}')
+            
+            ax.set_title(f'Action: {action}, Layer {lid}')
+            ax.set_xlabel('Token Position (0~7)')
+            ax.set_ylabel('Count')
+            ax.set_xticks(range(8))
+            ax.legend()
+        
         plt.tight_layout()
-        plt.savefig(f'action_expert_stat_{action}.png')
+        plt.show()

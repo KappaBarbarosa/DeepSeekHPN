@@ -27,8 +27,8 @@ agent: "updeept_agent"
 agent_output_type: q
 # %%%%%%%%%%%%% Transformer Settings %%%%%%%%%%%
 transformer_embed_dim: 32
-moe_inter_dim: 48
-n_routed_experts: 6
+moe_inter_dim: 64
+n_routed_experts: 3
 n_shared_experts: 1
 n_activated_experts:  1
 n_expert_groups:  1
@@ -48,7 +48,7 @@ q_lambda: False
 
 use_wandb: False
 
-name: "updeept_qmix_48_6 transfer from 3m freeze part expert"
+name: "updeept_qmix_64_3_aggregate"
 
 score_func: "softmax"
 
@@ -60,12 +60,12 @@ beta_fast: 32
 beta_slow: 1
 mscale: 1.0
 
-transfer: True
-evaluate: True
+transfer: False
+evaluate: False
 moe_coef: 0.001
 bias_gamma: 0.01
 gate: 'v2'
 freeze: "none"
 # keep_experts: [0,1]
-n_additional_experts: 2
-checkpoint_path: "/home/marl2024/DeepSeek_HPN/results/models/sc2_3s_vs_4z-obs_aid=1-obs_act=1/algo=updeept_qmix_48_6 v2 transfer from 3m freeze shared expert-agent=updeept_agent/env_n=8/rnn_dim=64-2bs=5000_128-tdlambda=0.6-epdec_0.05=100k/updeept_qmix_48_6 v2 transfer from 3m freeze shared expert__2025-05-06_10-37-17"
+# n_additional_experts: 2
+# checkpoint_path: "/home/marl2024/DeepSeekHPN/results/models/sc2_3s_vs_3z-obs_aid=1-obs_act=1/algo=updeept_qmix_64_3 -agent=updeept_agent/env_n=8/rnn_dim=64-2bs=5000_128-tdlambda=0.6-epdec_0.05=100k/updeept_qmix_64_3 __2025-05-04_11-53-07"
