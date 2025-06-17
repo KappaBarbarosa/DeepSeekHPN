@@ -69,7 +69,7 @@ class UPDeepT(nn.Module):
         # concat basic action Q with enemy attack Q
         q = torch.cat((q_basic_actions, q_enemies), 1)
 
-        return q, h, all_stats  # [bs * n_agents, 6 + n_enemies], this shape will be reshaped to  [bs, n_agents, 6 + n_enemies] in forward() of the BasicMAC
+        return q, h, all_stats # [bs * n_agents, 6 + n_enemies], this shape will be reshaped to  [bs, n_agents, 6 + n_enemies] in forward() of the BasicMAC
 
 
 class SelfAttention(nn.Module):

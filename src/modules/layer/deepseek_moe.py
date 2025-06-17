@@ -4,6 +4,7 @@ import torch.nn as nn
 from .deepseek_mlp import MLP
 from .deepseek_expert import Expert
 from .deepseeek_utils import *
+from .gate import REGISTRY as gate_registry
 
 class MoE(nn.Module):
     """
@@ -32,10 +33,7 @@ class MoE(nn.Module):
         self.n_additional_experts = args.n_additional_experts
         self.n_activated_experts = args.n_activated_experts
         self.gate_mode = args.gate
-        if self.gate_mode == 'v1':
-            self.gate = Gate(args)
-        else:
-            self.gate = Gate_v2(args)
+        self.gate = gate_registry[args.gate](args)
         self.moe_inter_dim = args.moe_inter_dim
         self.experts = nn.ModuleList([Expert(self.dim, args.moe_inter_dim) 
                                       for i in range(self.n_routed_experts)])
@@ -66,7 +64,7 @@ class MoE(nn.Module):
         if self.gate_mode == 'v1':
             weights, indices = self.gate(x, self.n_activated_experts)
         else:
-            weights, indices, stats = self.gate(x,True)
+            weights, indices, stats = self.gate(x)
 
         # print(f'indice shape:', indices.shape, 'last choice :', indices[-1])
         y = torch.zeros_like(x)
@@ -86,6 +84,7 @@ class MoE(nn.Module):
             y[idx] += expert(x[idx]) * weights[idx, top, None]
         z = self.shared_experts(x)
 
-        if self.gate_mode == 'v2':
+        if self.gate_mode != 'v1':
             return (y + z).view(shape), stats
-        return (y + z).view(shape)
+        else:
+            return (y + z).view(shape)

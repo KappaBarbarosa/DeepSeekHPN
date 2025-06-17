@@ -189,28 +189,6 @@ class NQLearner:
         
         # print("loss", loss.item())
         router_stats = self.mac.pop_router_stats()
-        with th.no_grad():
-            for lid, stats_list in router_stats.items():                                 # ← 斷梯度
-                probs = th.cat([s["probs"] for s in stats_list], 0)  # 仍在 CPU
-                idx   = th.cat([s["indices"] for s in stats_list], 0)
-
-                E   = probs.size(1)
-                p_e = probs.sum(0);  p_e = p_e / p_e.sum()
-                L_imp = E * (p_e ** 2).sum()
-
-                tok_cnt  = th.bincount(idx.flatten(), minlength=E).float()
-                tok_frac = tok_cnt / tok_cnt.sum()
-                L_cap = E * (tok_frac ** 2).sum()
-
-                moe_loss_layer = (L_imp + L_cap).to(self.device)   # 只把標量搬到 GPU
-                # print(f"Layer {lid} Imp Loss: {L_imp.item()}, Cap Loss: {L_cap.item()}")
-                loss += moe_loss_layer * self.args.moe_coef          # ← 累加進總損失
-
-            # -------- Loss‑Free 動態偏置更新 --------
-            target = tok_cnt.mean()
-            gate   = self.mac.agent.transformer.tblocks[lid].ff.gate
-            
-            gate.update_dyn_bias(tok_cnt, target, gamma=self.args.bias_gamma)
         # Optimise
         self.optimiser.zero_grad()
         loss.backward()

@@ -11,9 +11,9 @@ epsilon_finish: 0.05
 epsilon_anneal_time: 100000 # 500000 for 6h_vs_8z
 
 runner: "parallel"
-batch_size_run: 1
+batch_size_run: 8
 buffer_size: 5000
-batch_size: 1
+batch_size: 128
 
 t_max: 10050000
 
@@ -48,7 +48,7 @@ q_lambda: False
 
 use_wandb: False
 
-name: "updeept_qmix_64_3_aggregate"
+name: "updeept_qmix_64_3_no_gate"
 
 score_func: "softmax"
 
@@ -64,8 +64,8 @@ transfer: False
 evaluate: False
 moe_coef: 0.001
 bias_gamma: 0.01
-gate: 'v2'
+gate: 'gate_v3'
 freeze: "none"
 # keep_experts: [0,1]
-# n_additional_experts: 2
+n_additional_experts: 0
 # checkpoint_path: "/home/marl2024/DeepSeekHPN/results/models/sc2_3s_vs_3z-obs_aid=1-obs_act=1/algo=updeept_qmix_64_3 -agent=updeept_agent/env_n=8/rnn_dim=64-2bs=5000_128-tdlambda=0.6-epdec_0.05=100k/updeept_qmix_64_3 __2025-05-04_11-53-07"
